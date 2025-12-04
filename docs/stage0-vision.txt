@@ -1,0 +1,75 @@
+# Stage 0 — Vision, Intent, and Guiding Principles for ClickSpectre
+
+This document captures the foundational reasoning behind ClickSpectre, so that
+future contributors (including Future-Version-Of-Myself) can understand why this
+project exists, what problems it is supposed to solve, and what constraints we
+set before writing any code.
+
+## 1. Purpose
+
+ClickSpectre is a ClickHouse usage visualization and cleanup assistant.  
+Its goal is to answer three deceptively simple questions:
+
+1. Which ClickHouse tables are actually used?
+2. Who (IP, user, Kubernetes service) uses them?
+3. Which tables are safe candidates for cleanup?
+
+This grew out of a real-world pain: nobody knows which tables do what, what is
+still alive, or who will scream if a table is dropped. Tribal knowledge dies,
+dev tables accumulate, materialized views drift, and the cluster becomes a
+graveyard of abandoned schemas.
+
+ClickSpectre provides factual, query-log-derived answers.
+
+## 2. Key Principles
+
+- **Truth comes from ClickHouse logs**, not documentation.
+- **MVP must be runnable offline**, with no external dependencies.
+- **Reports must be visual, not textual**, or they won't get used.
+- **The tool must be disposable**, not a permanent cluster resident.
+- **Future expansion must be possible without rearchitecting.**
+
+## 3. What ClickSpectre Will Produce
+
+The project will output:
+
+- a "snapshot report" (JSON + static HTML/JS)
+- a service⇄table graph with arrows
+- usage statistics
+- cleanup recommendations
+- anomaly detection ("spooky logs") without AI initially
+
+Later, an LLM can enhance these anomalies with remediation advice.
+
+## 4. Why Not Store Anything in the Cluster?
+
+The MVP design explicitly avoids:
+- CRDs
+- Controllers
+- Persistent services
+
+Because trust, security review, and operational complexity are blockers for adoption.
+
+Instead: ClickSpectre runs locally, produces a static report, and optionally deploys
+that report into a temporary namespace for viewing.
+
+## 5. Non-Goals (Stage 0)
+
+- No daemon mode.
+- No continuous monitoring.
+- No in-cluster persistence.
+- No LLM calls.
+- No modifying ClickHouse (read-only).
+- No multi-cluster scheduling.
+
+Those belong to Stage 2.
+
+## 6. Long-Term Vision
+
+Eventually ClickSpectre may become an always-on observability tool with:
+- streaming ingestion
+- LLM remediation advice
+- a persistent UI
+- GitOps integration for suggesting drop/cleanup PRs
+
+But only if Stage 1 proves the concept.

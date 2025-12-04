@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClickSpectre Analysis Report</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="libs/d3.v7.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>ClickSpectre Analysis Report</h1>
+        <div id="metadata" class="metadata"></div>
+    </header>
+
+    <nav>
+        <button id="tab-overview" class="tab-button active" onclick="showTab('overview')">Overview</button>
+        <button id="tab-graph" class="tab-button" onclick="showTab('graph')">Service→Table Graph</button>
+        <button id="tab-tables" class="tab-button" onclick="showTab('tables')">Tables</button>
+        <button id="tab-services" class="tab-button" onclick="showTab('services')">Services</button>
+        <button id="tab-cleanup" class="tab-button" onclick="showTab('cleanup')">Cleanup Recommendations</button>
+        <button id="tab-anomalies" class="tab-button" onclick="showTab('anomalies')">Anomalies</button>
+    </nav>
+
+    <main>
+        <!-- Overview Panel -->
+        <section id="overview-panel" class="panel active">
+            <h2>Overview</h2>
+            <div class="stat-cards">
+                <div class="card">
+                    <h3>Total Tables</h3>
+                    <div id="total-tables" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <h3>Active Services</h3>
+                    <div id="total-services" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <h3>Queries Analyzed</h3>
+                    <div id="total-queries" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <h3>Anomalies Detected</h3>
+                    <div id="total-anomalies" class="stat-value">-</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Graph Panel -->
+        <section id="graph-panel" class="panel">
+            <h2>Service → Table Bipartite Graph</h2>
+            <div id="bipartite-graph"></div>
+        </section>
+
+        <!-- Tables Panel -->
+        <section id="tables-panel" class="panel">
+            <h2>Tables</h2>
+            <input type="text" id="table-search" placeholder="Search tables..." onkeyup="filterTables()">
+            <div class="table-container">
+                <table id="tables-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTables('name')">Table ▼</th>
+                            <th onclick="sortTables('reads')">Reads ▼</th>
+                            <th onclick="sortTables('writes')">Writes ▼</th>
+                            <th onclick="sortTables('last_access')">Last Access ▼</th>
+                            <th>Activity</th>
+                            <th onclick="sortTables('score')">Score ▼</th>
+                            <th onclick="sortTables('category')">Category ▼</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tables-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Services Panel -->
+        <section id="services-panel" class="panel">
+            <h2>Services</h2>
+            <div class="table-container">
+                <table id="services-table">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Namespace</th>
+                            <th>IP</th>
+                            <th>Tables Used</th>
+                            <th>Query Count</th>
+                        </tr>
+                    </thead>
+                    <tbody id="services-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Cleanup Panel -->
+        <section id="cleanup-panel" class="panel">
+            <h2>Cleanup Recommendations</h2>
+            <div class="cleanup-categories">
+                <div class="cleanup-category safe-to-drop">
+                    <h3>Safe to Drop</h3>
+                    <p class="category-desc">Tables with very low activity and no recent access</p>
+                    <ul id="safe-to-drop"></ul>
+                </div>
+                <div class="cleanup-category likely-safe">
+                    <h3>Likely Safe</h3>
+                    <p class="category-desc">Tables with moderate activity - review before dropping</p>
+                    <ul id="likely-safe"></ul>
+                </div>
+                <div class="cleanup-category keep">
+                    <h3>Keep</h3>
+                    <p class="category-desc">Active tables with regular usage</p>
+                    <ul id="keep"></ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Anomalies Panel -->
+        <section id="anomalies-panel" class="panel">
+            <h2>Anomalies</h2>
+            <div id="anomalies-list"></div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+# Stage 2 — Expansion Plan for ClickSpectre
+
+This file captures the future roadmap for turning ClickSpectre from a
+one-shot snapshot tool into a continuous observability service.
+
+## 1. Daemon Mode
+
+In Stage 2, ClickSpectre gains the ability to run continuously:
+
+- Poll system.query_log in intervals.
+- Store state in:
+  - SQLite (simple) OR
+  - ClickHouse local instance (advanced)
+- Provide REST/gRPC API for queries.
+- Generate updated reports automatically.
+
+## 2. Kubernetes Deployment
+
+We introduce:
+
+- Deployment
+- Service
+- Optional Ingress
+- Optional CRD (ClickSpectreConfig)
+- Helm chart
+
+Users can choose:
+- snapshot-only mode (Stage 1)
+- or daemon mode (Stage 2)
+
+## 3. LLM Advisor Integration
+
+Add optional module:
+
+- Input: anomalies[]
+- Output: advice[] per anomaly
+- LLM endpoint configurable via CLI/env: 
+–llm-endpoint=https://…
+–llm-api-key-env=OPENAI_API_KEY
+LLM suggestions *never* alter data automatically.  
+They appear in the UI as remediation hints.
+
+## 4. GitOps Integration
+
+Stage 2 or 3 could provide:
+
+- Automatic PR generation:
+- drop unused tables
+- rename suspect tables
+- cleanup orphaned MVs
+
+## 5. Subscriptions & Notifications
+
+Optional but nice:
+
+- Slack webhook: "5 tables unused for 60 days"
+- Prometheus metrics for table usage
+
+## 6. Safeguards
+
+Stage 2 introduces:
+
+- Rulesets for deletion safety
+- Table whitelisting
+- Namespaces/service exclusion filters
+- Data retention policies
+- Audit logs
+
+## 7. UI Enhancements
+
+- Live updating graphs
+- Zoomable service⇄table map
+- Drill-down time-series
+- Dark mode (obviously)

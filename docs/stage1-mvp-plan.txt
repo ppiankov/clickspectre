@@ -1,0 +1,111 @@
+# Stage 1 — MVP Snapshot Plan for ClickSpectre
+
+This document describes the detailed plan for the MVP.  
+The goal is to implement a one-shot snapshot analyzer that outputs a static
+visual report that is immediately useful and production-safe.
+
+## 1. MVP Requirements
+
+The MVP must:
+
+1. Run as a single Go binary.
+2. Connect to ClickHouse using user-provided DSN/credentials.
+3. Optionally connect to Kubernetes (to resolve IP → service).
+4. Analyze query logs from system.query_log over a time window.
+5. Extract:
+   - tables referenced
+   - query types (read/write)
+   - client IP/user
+   - timestamps
+   - materialized view dependencies
+6. Build:
+   - table usage model
+   - service usage model
+   - edges (service → table)
+   - anomalies list (weird/spooky entries)
+7. Score tables for cleanup.
+8. Generate:
+   - report.json
+   - static HTML + JS report viewer
+9. Serve the report locally:
+   `clickspectre serve ./report-dir`
+10. DO NOT rely on Kubernetes, LLMs, or external services.
+
+## 2. Architecture
+
+The MVP binary consists of 5 modules:
+
+### (A) Collector
+- Queries ClickHouse.
+- (Optional) queries Kubernetes API to resolve pod/service for each client IP.
+
+### (B) Analyzer
+- Maps queries → tables → clients.
+- Builds:
+  - tables[]
+  - services[]
+  - edges[]
+  - anomalies[]
+- Computes usage statistics.
+
+### (C) Scorer
+- Determines:
+  - active
+  - unused
+  - suspect
+- Creates cleanup recommendations.
+
+### (D) Report Generator
+- Writes:
+  `report.json`
+- Copies static UI assets into output directory.
+
+### (E) Local Server
+- Embeds a minimal HTTP file server to preview reports.
+
+## 3. Output Format
+
+The MVP emits exactly one directory, e.g.:
+report-2025-02-04/
+index.html
+app.js
+styles.css
+report.json
+
+The report.json schema is stable and prepares for Stage 2.
+
+## 4. MVP UI Features
+
+- List of services.
+- List of tables.
+- Bipartite graph (service → table arrows).
+- Table details:
+  - reads, writes, last access
+  - usage sparkline (client-rendered)
+- Cleanup panel:
+  - safeToDrop[]
+  - likelySafe[]
+  - keep[]
+- Anomalies panel:
+  - human-readable descriptions
+
+## 5. CLI Commands (MVP)
+
+### `analyze`
+clickspectre analyze 
+–clickhouse-dsn “…” 
+–output ./report 
+–lookback 30d 
+–resolve-k8s=true 
+–kubeconfig ~/.kube/config
+### `serve`
+### (Optional) `version`
+
+## 6. Non-Goals for MVP
+
+- No daemon mode.
+- No LLM.
+- No automatic cleanup.
+- No automatic Kubernetes deployment.
+
+Those come in Stage 2.
