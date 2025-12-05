@@ -11,6 +11,7 @@ import (
 // Collector interface for collecting ClickHouse query logs
 type Collector interface {
 	Collect(ctx context.Context) ([]*models.QueryLogEntry, error)
+	FetchTableMetadata(ctx context.Context) (map[string]*models.Table, error)
 	Close() error
 }
 
@@ -53,6 +54,11 @@ func (c *collector) Collect(ctx context.Context) ([]*models.QueryLogEntry, error
 	c.pool.Stop()
 
 	return entries, nil
+}
+
+// FetchTableMetadata retrieves table metadata from system.tables
+func (c *collector) FetchTableMetadata(ctx context.Context) (map[string]*models.Table, error) {
+	return c.client.FetchTableMetadata(ctx)
 }
 
 // Close closes the collector and its resources

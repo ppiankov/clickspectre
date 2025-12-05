@@ -97,6 +97,52 @@
         <section id="cleanup-panel" class="panel">
             <h2>Cleanup Recommendations</h2>
             <div class="cleanup-categories">
+                <!-- Zero Usage Tables - High Priority -->
+                <div class="cleanup-category zero-usage-non-replicated">
+                    <h3>🎯 Zero Usage Tables - Non-Replicated (High Priority)</h3>
+                    <p class="category-desc">Tables with NO queries in the lookback period and no replication - prime deletion candidates</p>
+                    <div class="zero-usage-table">
+                        <table id="zero-usage-non-replicated-table">
+                            <thead>
+                                <tr>
+                                    <th>Table</th>
+                                    <th>Engine</th>
+                                    <th>Replicated</th>
+                                    <th>Size (MB)</th>
+                                    <th>Rows</th>
+                                </tr>
+                            </thead>
+                            <tbody id="zero-usage-non-replicated-tbody"></tbody>
+                        </table>
+                        <p id="zero-usage-non-replicated-empty" class="empty-message" style="display:none;">
+                            ✅ No non-replicated zero-usage tables found
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Zero Usage Tables - Replicated (Caution) -->
+                <div class="cleanup-category zero-usage-replicated">
+                    <h3>⚠️ Zero Usage Tables - Replicated (Review Carefully)</h3>
+                    <p class="category-desc">Replicated tables with no queries - might be intentional idle replicas</p>
+                    <div class="zero-usage-table">
+                        <table id="zero-usage-replicated-table">
+                            <thead>
+                                <tr>
+                                    <th>Table</th>
+                                    <th>Engine</th>
+                                    <th>Replicated</th>
+                                    <th>Size (MB)</th>
+                                    <th>Rows</th>
+                                </tr>
+                            </thead>
+                            <tbody id="zero-usage-replicated-tbody"></tbody>
+                        </table>
+                        <p id="zero-usage-replicated-empty" class="empty-message" style="display:none;">
+                            ✅ No replicated zero-usage tables found
+                        </p>
+                    </div>
+                </div>
+
                 <div class="cleanup-category safe-to-drop">
                     <h3>Safe to Drop</h3>
                     <p class="category-desc">Tables with very low activity and no recent access</p>

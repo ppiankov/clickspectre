@@ -314,10 +314,14 @@ func (c *ClickHouseClient) FetchTableMetadata(ctx context.Context) (map[string]*
 			database,
 			name,
 			engine,
-			dependencies_database,
-			dependencies_table
+			total_bytes,
+			total_rows,
+			metadata_modification_time as create_time,
+			arrayStringConcat(dependencies_database, ',') as dep_databases,
+			arrayStringConcat(dependencies_table, ',') as dep_tables
 		FROM system.tables
 		WHERE database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
+		ORDER BY database, name
 	`
 
 	// Don't use timeout for readonly users
@@ -331,25 +335,50 @@ func (c *ClickHouseClient) FetchTableMetadata(ctx context.Context) (map[string]*
 
 	for rows.Next() {
 		var database, name, engine string
-		var depDatabase, depTable sql.NullString
+		var totalBytes, totalRows sql.NullInt64
+		var createTime time.Time
+		var depDatabases, depTables sql.NullString
 
-		if err := rows.Scan(&database, &name, &engine, &depDatabase, &depTable); err != nil {
+		if err := rows.Scan(&database, &name, &engine, &totalBytes, &totalRows, &createTime, &depDatabases, &depTables); err != nil {
 			log.Printf("Warning: failed to scan table metadata: %v", err)
 			continue
 		}
 
 		fullName := database + "." + name
+
+		// Convert NULL-safe integers to uint64
+		var bytesValue, rowsValue uint64
+		if totalBytes.Valid {
+			bytesValue = uint64(totalBytes.Int64)
+		}
+		if totalRows.Valid {
+			rowsValue = uint64(totalRows.Int64)
+		}
+
 		table := &models.Table{
 			Name:         name,
 			Database:     database,
 			FullName:     fullName,
+			Engine:       engine,
+			IsReplicated: strings.Contains(engine, "Replicated"),
+			TotalBytes:   bytesValue,
+			TotalRows:    rowsValue,
+			CreateTime:   createTime,
 			IsMV:         strings.HasPrefix(engine, "Materialized"),
 			MVDependency: []string{},
+			Sparkline:    []models.TimeSeriesPoint{}, // Initialize empty slice
 		}
 
-		if depDatabase.Valid && depTable.Valid {
-			dep := depDatabase.String + "." + depTable.String
-			table.MVDependency = append(table.MVDependency, dep)
+		// Parse comma-separated dependencies
+		if depDatabases.Valid && depTables.Valid && depDatabases.String != "" && depTables.String != "" {
+			databases := strings.Split(depDatabases.String, ",")
+			tables := strings.Split(depTables.String, ",")
+			for i := 0; i < len(databases) && i < len(tables); i++ {
+				if databases[i] != "" && tables[i] != "" {
+					dep := databases[i] + "." + tables[i]
+					table.MVDependency = append(table.MVDependency, dep)
+				}
+			}
 		}
 
 		tables[fullName] = table

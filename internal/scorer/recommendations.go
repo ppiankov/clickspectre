@@ -2,6 +2,7 @@ package scorer
 
 import (
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +19,8 @@ func GenerateRecommendations(
 	scorer := NewScorer(config.ScoringAlgorithm)
 
 	// Initialize as empty slices instead of nil to avoid JSON null values
+	zeroUsageNonReplicated := []models.TableRecommendation{}
+	zeroUsageReplicated := []models.TableRecommendation{}
 	safeToDrop := []string{}
 	likelySafe := []string{}
 	keep := []string{}
@@ -25,6 +28,39 @@ func GenerateRecommendations(
 	now := time.Now()
 
 	for tableName, table := range tables {
+		// Phase 1: Zero-usage tables (highest priority)
+		if table.ZeroUsage {
+			// Apply size filter
+			sizeMB := float64(table.TotalBytes) / 1e6
+			if sizeMB < config.MinTableSizeMB {
+				continue // Skip tables below threshold
+			}
+
+			// Score the table (uses special zero-usage scoring)
+			score := scorer.Score(table, services)
+			table.Score = score
+
+			// Only recommend if score is low enough and not an MV or MV dependency
+			if score < 0.30 && !table.IsMV && len(table.MVDependency) == 0 {
+				rec := models.TableRecommendation{
+					Name:         table.FullName,
+					Database:     table.Database,
+					Engine:       table.Engine,
+					IsReplicated: table.IsReplicated,
+					SizeMB:       sizeMB,
+					Rows:         table.TotalRows,
+				}
+
+				if table.IsReplicated {
+					zeroUsageReplicated = append(zeroUsageReplicated, rec)
+				} else {
+					zeroUsageNonReplicated = append(zeroUsageNonReplicated, rec)
+				}
+				continue // Don't add to other categories
+			}
+		}
+
+		// Phase 2: Tables with usage (existing logic)
 		// Apply safety rules first
 		if !isSafeToRecommend(tableName, table, now) {
 			keep = append(keep, tableName)
@@ -50,15 +86,25 @@ func GenerateRecommendations(
 		}
 	}
 
+	// Sort zero-usage by size (largest first = highest value cleanup)
+	sort.Slice(zeroUsageNonReplicated, func(i, j int) bool {
+		return zeroUsageNonReplicated[i].SizeMB > zeroUsageNonReplicated[j].SizeMB
+	})
+	sort.Slice(zeroUsageReplicated, func(i, j int) bool {
+		return zeroUsageReplicated[i].SizeMB > zeroUsageReplicated[j].SizeMB
+	})
+
 	if config.Verbose {
-		log.Printf("Recommendations: %d safe to drop, %d likely safe, %d keep",
-			len(safeToDrop), len(likelySafe), len(keep))
+		log.Printf("Recommendations: %d zero-usage non-replicated, %d zero-usage replicated, %d safe to drop, %d likely safe, %d keep",
+			len(zeroUsageNonReplicated), len(zeroUsageReplicated), len(safeToDrop), len(likelySafe), len(keep))
 	}
 
 	return models.CleanupRecommendations{
-		SafeToDrop: safeToDrop,
-		LikelySafe: likelySafe,
-		Keep:       keep,
+		ZeroUsageNonReplicated: zeroUsageNonReplicated,
+		ZeroUsageReplicated:    zeroUsageReplicated,
+		SafeToDrop:             safeToDrop,
+		LikelySafe:             likelySafe,
+		Keep:                   keep,
 	}
 }
 

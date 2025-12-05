@@ -32,6 +32,14 @@ type Table struct {
 	Category     string            `json:"category"` // "active", "unused", "suspect"
 	IsMV         bool              `json:"is_materialized_view"`
 	MVDependency []string          `json:"mv_dependencies,omitempty"`
+
+	// New fields for unused table detection
+	Engine       string    `json:"engine,omitempty"`       // "MergeTree", "ReplicatedMergeTree", etc.
+	IsReplicated bool      `json:"is_replicated"`          // Derived from engine name
+	TotalBytes   uint64    `json:"total_bytes,omitempty"`  // Table size in bytes
+	TotalRows    uint64    `json:"total_rows,omitempty"`   // Row count
+	CreateTime   time.Time `json:"create_time,omitempty"`  // Table creation time
+	ZeroUsage    bool      `json:"zero_usage"`             // Flag: no queries in lookback period
 }
 
 // Service represents a Kubernetes service or raw IP

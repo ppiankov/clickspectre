@@ -149,6 +149,10 @@ function renderServices() {
 function renderCleanup() {
     const recs = report.cleanup_recommendations;
 
+    // Render zero-usage tables
+    renderZeroUsageNonReplicated();
+    renderZeroUsageReplicated();
+
     // Handle null or empty arrays gracefully
     const safeToDrop = recs.safe_to_drop || [];
     const likelySafe = recs.likely_safe || [];
@@ -165,6 +169,60 @@ function renderCleanup() {
     document.getElementById('keep').innerHTML = keep.length > 0
         ? keep.map(t => `<li>${t}</li>`).join('')
         : '<li><em>No tables identified</em></li>';
+}
+
+// Render zero-usage non-replicated tables
+function renderZeroUsageNonReplicated() {
+    const tbody = document.getElementById('zero-usage-non-replicated-tbody');
+    const emptyMsg = document.getElementById('zero-usage-non-replicated-empty');
+    const table = document.getElementById('zero-usage-non-replicated-table');
+    const recs = report.cleanup_recommendations.zero_usage_non_replicated || [];
+
+    if (recs.length === 0) {
+        table.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        return;
+    }
+
+    table.style.display = 'table';
+    emptyMsg.style.display = 'none';
+
+    tbody.innerHTML = recs.map(t => `
+        <tr>
+            <td><code>${t.name}</code></td>
+            <td><span class="engine-badge">${t.engine}</span></td>
+            <td>${t.is_replicated ? '✅ Yes' : '❌ No'}</td>
+            <td>${t.size_mb.toFixed(2)}</td>
+            <td>${t.rows.toLocaleString()}</td>
+        </tr>
+    `).join('');
+}
+
+// Render zero-usage replicated tables
+function renderZeroUsageReplicated() {
+    const tbody = document.getElementById('zero-usage-replicated-tbody');
+    const emptyMsg = document.getElementById('zero-usage-replicated-empty');
+    const table = document.getElementById('zero-usage-replicated-table');
+    const recs = report.cleanup_recommendations.zero_usage_replicated || [];
+
+    if (recs.length === 0) {
+        table.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        return;
+    }
+
+    table.style.display = 'table';
+    emptyMsg.style.display = 'none';
+
+    tbody.innerHTML = recs.map(t => `
+        <tr>
+            <td><code>${t.name}</code></td>
+            <td><span class="engine-badge">${t.engine}</span></td>
+            <td>${t.is_replicated ? '✅ Yes' : '❌ No'}</td>
+            <td>${t.size_mb.toFixed(2)}</td>
+            <td>${t.rows.toLocaleString()}</td>
+        </tr>
+    `).join('');
 }
 
 // Render anomalies
