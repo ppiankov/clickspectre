@@ -524,6 +524,15 @@ It **never**:
 ClickSpectre is safe to run in production:  
 all actions are observational, never destructive.
 
+### Kubernetes namespace creation
+
+When deploying the report to Kubernetes (via `clickspectre deploy`), the tool will:
+
+- Check whether the target namespace exists
+- **Create it only if it does not already exist**
+
+This is the only write operation performed on the Kubernetes side, and it is non-destructive.  
+No other resources are modified unless you explicitly ask ClickSpectre to create them (Ingress, Service, Deployment, etc.).
 
 ⸻
 
