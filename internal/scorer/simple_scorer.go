@@ -11,6 +11,29 @@ type SimpleScorer struct{}
 
 // Score calculates a score for a table (0.0 - 1.0)
 func (s *SimpleScorer) Score(table *models.Table, services map[string]*models.Service) float64 {
+	// Special handling for zero-usage tables
+	if table.ZeroUsage {
+		score := 0.0
+
+		// Risk factors that INCREASE score (less safe to delete):
+		if table.IsMV || len(table.MVDependency) > 0 {
+			score += 0.50 // Has MV dependencies
+		}
+		if table.IsReplicated {
+			score += 0.30 // Replicated table (might be intentionally idle)
+		}
+		if table.TotalBytes < 1e6 { // < 1MB
+			score += 0.20 // Too small to matter
+		}
+
+		// Negative factors (decrease score = safer to delete):
+		if table.TotalBytes > 1e9 { // > 1GB
+			score -= 0.10 // Large size = valuable cleanup
+		}
+
+		return score
+	}
+
 	score := 0.0
 	now := time.Now()
 

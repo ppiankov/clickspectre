@@ -88,6 +88,8 @@ generate cleanup recommendations, and create an interactive visual report.`,
 	cmd.Flags().StringVar(&cfg.ScoringAlgorithm, "scoring-algorithm", "simple", "Scoring algorithm (simple)")
 	cmd.Flags().BoolVar(&cfg.AnomalyDetection, "anomaly-detection", true, "Enable anomaly detection")
 	cmd.Flags().BoolVar(&cfg.IncludeMVDeps, "include-mv-deps", true, "Include materialized view dependencies")
+	cmd.Flags().BoolVar(&cfg.DetectUnusedTables, "detect-unused-tables", false, "Detect tables with zero usage in query logs")
+	cmd.Flags().Float64Var(&cfg.MinTableSizeMB, "min-table-size", 1.0, "Minimum table size in MB for unused table recommendations")
 
 	// Operational flags
 	cmd.Flags().BoolVar(&cfg.Verbose, "verbose", false, "Verbose logging")
@@ -142,7 +144,7 @@ func runAnalyze(cfg *config.Config) error {
 
 	// 4. Analyze data
 	fmt.Println("🔍 Analyzing data...")
-	an := analyzer.New(cfg, resolver)
+	an := analyzer.New(cfg, resolver, col)
 	if err := an.Analyze(ctx, entries); err != nil {
 		return fmt.Errorf("failed to analyze data: %w", err)
 	}

@@ -25,7 +25,19 @@ type Metadata struct {
 
 // CleanupRecommendations groups tables by safety category
 type CleanupRecommendations struct {
-	SafeToDrop []string `json:"safe_to_drop"`
-	LikelySafe []string `json:"likely_safe"`
-	Keep       []string `json:"keep"`
+	ZeroUsageNonReplicated []TableRecommendation `json:"zero_usage_non_replicated"` // High priority - unused, not replicated
+	ZeroUsageReplicated    []TableRecommendation `json:"zero_usage_replicated"`     // Lower priority - unused, replicated
+	SafeToDrop             []string              `json:"safe_to_drop"`
+	LikelySafe             []string              `json:"likely_safe"`
+	Keep                   []string              `json:"keep"`
+}
+
+// TableRecommendation contains detailed information about a table for cleanup recommendations
+type TableRecommendation struct {
+	Name         string  `json:"name"`
+	Database     string  `json:"database"`
+	Engine       string  `json:"engine"`
+	IsReplicated bool    `json:"is_replicated"`
+	SizeMB       float64 `json:"size_mb"`
+	Rows         uint64  `json:"rows"`
 }

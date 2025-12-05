@@ -25,9 +25,11 @@ type Config struct {
 	Format    string
 
 	// Analysis settings
-	ScoringAlgorithm string
-	AnomalyDetection bool
-	IncludeMVDeps    bool
+	ScoringAlgorithm   string
+	AnomalyDetection   bool
+	IncludeMVDeps      bool
+	DetectUnusedTables bool    // Enable detection of tables with zero usage
+	MinTableSizeMB     float64 // Minimum table size in MB for unused table recommendations
 
 	// Server settings
 	ServerPort int
@@ -50,10 +52,12 @@ func DefaultConfig() *Config {
 		Concurrency:      5,
 		OutputDir:        "./report",
 		Format:           "json",
-		ScoringAlgorithm: "simple",
-		AnomalyDetection: true,
-		IncludeMVDeps:    true,
-		ServerPort:       8080,
+		ScoringAlgorithm:   "simple",
+		AnomalyDetection:   true,
+		IncludeMVDeps:      true,
+		DetectUnusedTables: false, // Opt-in via flag
+		MinTableSizeMB:     1.0,   // 1MB default threshold
+		ServerPort:         8080,
 		Verbose:          false,
 		DryRun:           false,
 	}

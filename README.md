@@ -10,6 +10,8 @@ ClickSpectre analyzes ClickHouse query logs to provide actionable insights about
 - 📊 Analyzes ClickHouse `system.query_log` to identify table usage patterns
 - 🔍 Discovers which services/clients use which tables
 - 🎯 Provides safety-scored cleanup recommendations (safe/likely safe/keep)
+- 🗑️ **NEW:** Detects tables with zero usage in query logs (never queried)
+- 📏 **NEW:** Size-based filtering for unused tables (skip tiny tables)
 - 📈 Generates interactive visual reports with D3.js bipartite graphs
 - ☸️ Optional Kubernetes IP→service resolution
 - 🚀 Concurrent processing with configurable worker pool
@@ -119,6 +121,38 @@ clickspectre analyze \
 
 **⚠️ Important:** If ClickHouse is behind a load balancer, you'll see LB IPs instead of real client IPs. To fix this, enable PROXY protocol on ClickHouse and your load balancer. See **[docs/CLICKHOUSE-REAL-CLIENT-IP.md](docs/CLICKHOUSE-REAL-CLIENT-IP.md)** for complete setup instructions.
 
+### 🗑️ Detecting Unused Tables (Zero Usage)
+
+ClickSpectre can detect tables that have **zero queries** in the lookback period - prime candidates for cleanup:
+
+```bash
+# Enable unused table detection (queries system.tables for complete inventory)
+clickspectre analyze \
+  --clickhouse-dsn "clickhouse://host:9000/default" \
+  --output ./report \
+  --lookback 30d \
+  --detect-unused-tables \
+  --min-table-size=10.0  # Only show tables >= 10MB
+```
+
+**How it works:**
+1. Analyzes `system.query_log` to find which tables were queried
+2. Queries `system.tables` to get complete table inventory
+3. Compares the two to identify tables with **zero usage**
+4. Separates replicated vs non-replicated tables (replicated might be intentional idle replicas)
+5. Filters by size to focus on tables worth cleaning up
+
+**Benefits:**
+- 🎯 **High-priority cleanup candidates** - Tables that have NEVER been queried
+- 📊 **Size information** - Focus on large unused tables first
+- ⚠️ **Replication awareness** - Flags replicated tables separately (they might be intentional)
+- 🛡️ **Safe filtering** - Excludes system tables and applies materialized view dependency checks
+
+**Report output:**
+- **Zero Usage - Non-Replicated (High Priority)**: Safe deletion candidates
+- **Zero Usage - Replicated (Review Carefully)**: Might be intentional idle replicas
+- Shows table size, row count, engine type, and replication status
+
 ### Advanced Options
 
 ```bash
@@ -160,6 +194,8 @@ Analyze ClickHouse usage and generate reports.
 | `--scoring-algorithm` | `simple` | Scoring algorithm |
 | `--anomaly-detection` | `true` | Enable anomaly detection |
 | `--include-mv-deps` | `true` | Include materialized view deps |
+| `--detect-unused-tables` | `false` | Detect tables with zero usage (queries system.tables) |
+| `--min-table-size` | `1.0` | Minimum table size in MB for unused table recommendations |
 | `--verbose` | `false` | Verbose logging |
 | `--dry-run` | `false` | Don't write output |
 
@@ -330,7 +366,12 @@ report/
 - **Graph**: D3.js bipartite graph visualization (service→table relationships)
 - **Tables**: Sortable table list with usage stats and sparklines
 - **Services**: List of services and their table usage
-- **Cleanup**: Categorized recommendations (safe to drop / likely safe / keep)
+- **Cleanup**: Categorized recommendations with new zero-usage detection
+  - **Zero Usage - Non-Replicated (High Priority)**: Tables never queried, not replicated
+  - **Zero Usage - Replicated (Review Carefully)**: Tables never queried, but replicated
+  - **Safe to Drop**: Low activity tables
+  - **Likely Safe**: Moderate activity tables
+  - **Keep**: Active tables
 - **Anomalies**: Detected unusual access patterns
 
 ## Architecture
@@ -367,8 +408,10 @@ ClickSpectre follows a modular architecture:
 Conservative scoring that:
 - Never recommends system tables
 - Never recommends tables with writes in last 7 days
-- Never recommends materialized views
+- Never recommends materialized views or MV dependencies
 - Flags anomalous tables as "suspect" not "safe"
+- **NEW:** Separates zero-usage tables by replication status
+- **NEW:** Applies size filtering to focus on meaningful cleanup (configurable via `--min-table-size`)
 
 ## Development
 
