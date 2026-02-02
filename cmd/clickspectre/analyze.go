@@ -64,7 +64,7 @@ generate cleanup recommendations, and create an interactive visual report.`,
 
 	// ClickHouse flags
 	cmd.Flags().StringVar(&cfg.ClickHouseDSN, "clickhouse-dsn", "", "ClickHouse DSN (required)")
-	cmd.MarkFlagRequired("clickhouse-dsn")
+	_ = cmd.MarkFlagRequired("clickhouse-dsn") // Error only occurs if flag doesn't exist
 
 	cmd.Flags().StringVar(&queryTimeoutStr, "query-timeout", "5m", "Query timeout (e.g., 5m, 10m, 1h)")
 	cmd.Flags().IntVar(&cfg.BatchSize, "batch-size", 100000, "Query log batch size")
