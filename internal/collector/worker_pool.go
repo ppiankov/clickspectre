@@ -10,15 +10,15 @@ import (
 
 // WorkerPool manages concurrent processing of query log entries
 type WorkerPool struct {
-	workers  int
-	jobs     chan *models.QueryLogEntry
-	results  chan *models.QueryLogEntry
-	errors   chan error
-	wg       sync.WaitGroup
-	ctx      context.Context
-	cancel   context.CancelFunc
-	started  bool
-	mu       sync.Mutex
+	workers int
+	jobs    chan *models.QueryLogEntry
+	results chan *models.QueryLogEntry
+	errors  chan error
+	wg      sync.WaitGroup
+	ctx     context.Context
+	cancel  context.CancelFunc
+	started bool
+	mu      sync.Mutex
 }
 
 // NewWorkerPool creates a new worker pool

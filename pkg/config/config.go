@@ -42,23 +42,23 @@ type Config struct {
 // DefaultConfig returns sensible defaults
 func DefaultConfig() *Config {
 	return &Config{
-		QueryTimeout:     5 * time.Minute,
-		BatchSize:        100000,
-		MaxRows:          1000000,
-		LookbackPeriod:   30 * 24 * time.Hour, // 30 days
-		ResolveK8s:       false,
-		K8sCacheTTL:      5 * time.Minute,
-		K8sRateLimit:     10,
-		Concurrency:      5,
-		OutputDir:        "./report",
-		Format:           "json",
+		QueryTimeout:       5 * time.Minute,
+		BatchSize:          100000,
+		MaxRows:            1000000,
+		LookbackPeriod:     30 * 24 * time.Hour, // 30 days
+		ResolveK8s:         false,
+		K8sCacheTTL:        5 * time.Minute,
+		K8sRateLimit:       10,
+		Concurrency:        5,
+		OutputDir:          "./report",
+		Format:             "json",
 		ScoringAlgorithm:   "simple",
 		AnomalyDetection:   true,
 		IncludeMVDeps:      true,
 		DetectUnusedTables: false, // Opt-in via flag
 		MinTableSizeMB:     1.0,   // 1MB default threshold
 		ServerPort:         8080,
-		Verbose:          false,
-		DryRun:           false,
+		Verbose:            false,
+		DryRun:             false,
 	}
 }
