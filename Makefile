@@ -59,6 +59,7 @@ deps: ## Download dependencies
 fmt: ## Format code
 	@echo "Formatting code..."
 	@go fmt ./...
+	@go mod tidy
 
 vet: ## Run go vet
 	@echo "Running go vet..."
