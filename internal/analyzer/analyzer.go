@@ -143,8 +143,8 @@ func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
 			metaTable.ZeroUsage = true
 			metaTable.Reads = 0
 			metaTable.Writes = 0
-			metaTable.LastAccess = time.Time{}  // Zero value
-			metaTable.FirstSeen = time.Time{}   // Zero value
+			metaTable.LastAccess = time.Time{} // Zero value
+			metaTable.FirstSeen = time.Time{}  // Zero value
 			metaTable.Score = 0.0
 			a.tables[fullName] = metaTable
 			zeroUsageCount++

@@ -20,10 +20,10 @@ type CacheEntry struct {
 
 // Cache provides thread-safe caching of IP→Service mappings
 type Cache struct {
-	mu       sync.RWMutex
-	entries  map[string]*CacheEntry
-	ttl      time.Duration
-	maxSize  int
+	mu      sync.RWMutex
+	entries map[string]*CacheEntry
+	ttl     time.Duration
+	maxSize int
 }
 
 // NewCache creates a new cache with given TTL

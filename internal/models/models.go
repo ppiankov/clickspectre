@@ -4,18 +4,18 @@ import "time"
 
 // QueryLogEntry represents a single entry from system.query_log
 type QueryLogEntry struct {
-	QueryID      string
-	Type         string // 'QueryStart', 'QueryFinish', etc.
-	EventTime    time.Time
-	QueryKind    string // 'Select', 'Insert', 'Create', etc.
-	Query        string
-	User         string
-	ClientIP     string
-	ReadRows     uint64
-	WrittenRows  uint64
-	Duration     time.Duration
-	Exception    string
-	Tables       []string // Extracted from query
+	QueryID     string
+	Type        string // 'QueryStart', 'QueryFinish', etc.
+	EventTime   time.Time
+	QueryKind   string // 'Select', 'Insert', 'Create', etc.
+	Query       string
+	User        string
+	ClientIP    string
+	ReadRows    uint64
+	WrittenRows uint64
+	Duration    time.Duration
+	Exception   string
+	Tables      []string // Extracted from query
 }
 
 // Table represents a ClickHouse table with usage stats
@@ -34,12 +34,12 @@ type Table struct {
 	MVDependency []string          `json:"mv_dependencies,omitempty"`
 
 	// New fields for unused table detection
-	Engine       string    `json:"engine,omitempty"`       // "MergeTree", "ReplicatedMergeTree", etc.
-	IsReplicated bool      `json:"is_replicated"`          // Derived from engine name
-	TotalBytes   uint64    `json:"total_bytes,omitempty"`  // Table size in bytes
-	TotalRows    uint64    `json:"total_rows,omitempty"`   // Row count
-	CreateTime   time.Time `json:"create_time,omitempty"`  // Table creation time
-	ZeroUsage    bool      `json:"zero_usage"`             // Flag: no queries in lookback period
+	Engine       string    `json:"engine,omitempty"`      // "MergeTree", "ReplicatedMergeTree", etc.
+	IsReplicated bool      `json:"is_replicated"`         // Derived from engine name
+	TotalBytes   uint64    `json:"total_bytes,omitempty"` // Table size in bytes
+	TotalRows    uint64    `json:"total_rows,omitempty"`  // Row count
+	CreateTime   time.Time `json:"create_time,omitempty"` // Table creation time
+	ZeroUsage    bool      `json:"zero_usage"`            // Flag: no queries in lookback period
 }
 
 // Service represents a Kubernetes service or raw IP
