@@ -16,9 +16,9 @@ build: ## Build the binary
 	@go build $(LDFLAGS) -o $(BINARY) ./cmd/clickspectre
 	@echo "Binary built: $(BINARY)"
 
-test: ## Run tests with race detector and coverage
+test: ## Run tests with race detector
 	@echo "Running tests..."
-	@go test -v -race -cover ./...
+	@go test -v -race ./...
 
 clean: ## Remove binaries and reports
 	@echo "Cleaning..."
