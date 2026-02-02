@@ -1,0 +1,137 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+
+    - name: Get dependencies
+      run: go mod download
+
+    - name: Run tests
+      run: make test
+
+    - name: Build for multiple platforms
+      run: |
+        # Linux amd64
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/clickspectre-Linux-x86_64 ./cmd/clickspectre
+
+        # Linux arm64
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bin/clickspectre-Linux-arm64 ./cmd/clickspectre
+
+        # macOS amd64 (Intel)
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bin/clickspectre-Darwin-x86_64 ./cmd/clickspectre
+
+        # macOS arm64 (Apple Silicon)
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/clickspectre-Darwin-arm64 ./cmd/clickspectre
+
+        # Windows amd64
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/clickspectre-Windows-x86_64.exe ./cmd/clickspectre
+
+    - name: Create checksums
+      run: |
+        cd bin
+        sha256sum clickspectre-* > checksums.txt
+        cat checksums.txt
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          bin/clickspectre-Linux-x86_64
+          bin/clickspectre-Linux-arm64
+          bin/clickspectre-Darwin-x86_64
+          bin/clickspectre-Darwin-arm64
+          bin/clickspectre-Windows-x86_64.exe
+          bin/checksums.txt
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          # ClickSpectre ${{ github.ref_name }}
+
+          **ClickHouse usage analyzer - determines which tables are used, by whom, and which are safe to clean up.**
+
+          ## Installation
+
+          ### Quick Install (macOS/Linux)
+          ```bash
+          # Detect your platform automatically
+          curl -L https://github.com/ppiankov/clickspectre/releases/latest/download/clickspectre-$(uname -s)-$(uname -m) -o clickspectre
+          chmod +x clickspectre
+          sudo mv clickspectre /usr/local/bin/
+          ```
+
+          ### Manual Download
+
+          Download the appropriate binary for your platform:
+          - **Linux x86_64**: `clickspectre-Linux-x86_64`
+          - **Linux ARM64**: `clickspectre-Linux-arm64`
+          - **macOS Intel**: `clickspectre-Darwin-x86_64`
+          - **macOS Apple Silicon**: `clickspectre-Darwin-arm64`
+          - **Windows x86_64**: `clickspectre-Windows-x86_64.exe`
+
+          ### Verify Checksums
+
+          ```bash
+          # Download checksums
+          curl -LO https://github.com/ppiankov/clickspectre/releases/download/${{ github.ref_name }}/checksums.txt
+
+          # Verify (Linux/macOS)
+          sha256sum -c checksums.txt
+
+          # Or verify single file
+          sha256sum clickspectre-Linux-x86_64
+          ```
+
+          ## Quick Start
+
+          ```bash
+          # Analyze ClickHouse usage (30-day lookback)
+          clickspectre analyze \
+            --clickhouse-dsn "clickhouse://user:password@host:9000/default" \
+            --output ./my-report \
+            --lookback 30d
+
+          # View the report
+          clickspectre serve ./my-report
+
+          # Deploy to Kubernetes
+          clickspectre deploy ./my-report --namespace monitoring --port 8080
+          ```
+
+          ## What's New
+
+          See full changelog below for detailed changes.
+
+          ## Documentation
+
+          - [README](https://github.com/ppiankov/clickspectre/blob/main/README.md)
+          - [ClickHouse Real Client IP Setup](https://github.com/ppiankov/clickspectre/blob/main/docs/CLICKHOUSE-REAL-CLIENT-IP.md)
+          - [Kubernetes Resolution](https://github.com/ppiankov/clickspectre/blob/main/docs/KUBERNETES-RESOLUTION.md)
+
+          ## Support
+
+          - **Issues**: https://github.com/ppiankov/clickspectre/issues
+          - **License**: MIT
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
