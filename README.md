@@ -107,8 +107,33 @@ clickspectre analyze \
 
 ### Installation
 
+**From Binary (Recommended):**
+
 ```bash
-# Install from source
+# macOS/Linux - Auto-detect platform
+curl -L https://github.com/ppiankov/clickspectre/releases/latest/download/clickspectre-$(uname -s)-$(uname -m) -o clickspectre
+chmod +x clickspectre
+sudo mv clickspectre /usr/local/bin/
+```
+
+**Platform-Specific Downloads:**
+
+- **Linux x86_64**: `clickspectre-Linux-x86_64`
+- **Linux ARM64**: `clickspectre-Linux-arm64`
+- **macOS Intel**: `clickspectre-Darwin-x86_64`
+- **macOS Apple Silicon**: `clickspectre-Darwin-arm64`
+- **Windows x86_64**: `clickspectre-Windows-x86_64.exe`
+
+**Verify Installation:**
+
+```bash
+clickspectre version
+```
+
+**From Source:**
+
+```bash
+# Install via go install
 go install github.com/ppiankov/clickspectre/cmd/clickspectre@latest
 
 # Or build locally
