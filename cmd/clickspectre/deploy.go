@@ -510,7 +510,7 @@ func portForward(config *rest.Config, namespace string, localPort int, stopCh, r
 
 	// Wait for stop signal or command to finish
 	go func() {
-		cmd.Wait()
+		_ = cmd.Wait() // Ignore error - we're just waiting for termination
 		close(stopCh)
 	}()
 
