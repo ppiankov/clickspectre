@@ -47,3 +47,4 @@ temp/
 # Development kubeconfig (don't commit real credentials)
 *.kubeconfig
 kubeconfig-*
+
