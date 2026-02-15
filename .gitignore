@@ -47,3 +47,7 @@ temp/
 # Development kubeconfig (don't commit real credentials)
 *.kubeconfig
 kubeconfig-*
+
+# Claude Code
+.claude/
+CLAUDE.local.md
