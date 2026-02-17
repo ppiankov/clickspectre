@@ -2,7 +2,7 @@ package k8s
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -13,7 +13,7 @@ import (
 
 // Client wraps the Kubernetes clientset
 type Client struct {
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 	config    *rest.Config
 }
 
@@ -49,7 +49,7 @@ func NewClient(kubeconfig string) (*Client, error) {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	log.Printf("Successfully connected to Kubernetes cluster")
+	slog.Debug("connected to Kubernetes cluster", slog.String("component", "kubernetes"))
 
 	return &Client{
 		clientset: clientset,
@@ -58,6 +58,6 @@ func NewClient(kubeconfig string) (*Client, error) {
 }
 
 // Clientset returns the underlying Kubernetes clientset
-func (c *Client) Clientset() *kubernetes.Clientset {
+func (c *Client) Clientset() kubernetes.Interface {
 	return c.clientset
 }

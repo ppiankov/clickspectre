@@ -4,6 +4,9 @@ import "time"
 
 // Report is the complete output structure
 type Report struct {
+	Tool                   string                 `json:"tool"`
+	Version                string                 `json:"version"`
+	Timestamp              string                 `json:"timestamp"`
 	Metadata               Metadata               `json:"metadata"`
 	Tables                 []Table                `json:"tables"`
 	Services               []Service              `json:"services"`

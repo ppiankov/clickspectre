@@ -1,7 +1,7 @@
 package scorer
 
 import (
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -66,6 +66,10 @@ func GenerateRecommendations(
 			keep = append(keep, tableName)
 			continue
 		}
+		if config.MinQueryCount > 0 && tableQueryCount(table) < config.MinQueryCount {
+			likelySafe = append(likelySafe, tableName)
+			continue
+		}
 
 		// Score the table
 		score := scorer.Score(table, services)
@@ -95,8 +99,13 @@ func GenerateRecommendations(
 	})
 
 	if config.Verbose {
-		log.Printf("Recommendations: %d zero-usage non-replicated, %d zero-usage replicated, %d safe to drop, %d likely safe, %d keep",
-			len(zeroUsageNonReplicated), len(zeroUsageReplicated), len(safeToDrop), len(likelySafe), len(keep))
+		slog.Debug("recommendations summary",
+			slog.Int("zero_usage_non_replicated", len(zeroUsageNonReplicated)),
+			slog.Int("zero_usage_replicated", len(zeroUsageReplicated)),
+			slog.Int("safe_to_drop", len(safeToDrop)),
+			slog.Int("likely_safe", len(likelySafe)),
+			slog.Int("keep", len(keep)),
+		)
 	}
 
 	return models.CleanupRecommendations{
@@ -139,4 +148,20 @@ func isSystemTable(tableName string) bool {
 	return strings.HasPrefix(lower, "system.") ||
 		strings.HasPrefix(lower, "information_schema.") ||
 		strings.HasPrefix(lower, "information_schema.")
+}
+
+func tableQueryCount(table *models.Table) uint64 {
+	if table == nil {
+		return 0
+	}
+
+	if len(table.Sparkline) > 0 {
+		var total uint64
+		for _, point := range table.Sparkline {
+			total += point.Value
+		}
+		return total
+	}
+
+	return table.Reads + table.Writes
 }

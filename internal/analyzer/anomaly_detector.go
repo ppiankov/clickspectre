@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/ppiankov/clickspectre/internal/models"
@@ -86,7 +86,7 @@ func (a *Analyzer) detectAnomalies() error {
 	}
 
 	if a.config.Verbose {
-		log.Printf("Detected %d anomalies", len(a.anomalies))
+		slog.Debug("detected anomalies", slog.Int("count", len(a.anomalies)))
 	}
 
 	return nil

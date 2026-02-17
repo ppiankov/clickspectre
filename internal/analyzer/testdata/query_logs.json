@@ -1,0 +1,44 @@
+[
+  {
+    "QueryID": "q1",
+    "Type": "QueryFinish",
+    "EventTime": "2026-02-15T10:00:00Z",
+    "QueryKind": "SELECT",
+    "Query": "select * from db1.table1",
+    "User": "u1",
+    "ClientIP": "10.0.0.1",
+    "ReadRows": 5,
+    "WrittenRows": 0,
+    "Duration": 1000000000,
+    "Exception": "",
+    "Tables": ["db1.table1"]
+  },
+  {
+    "QueryID": "q2",
+    "Type": "QueryFinish",
+    "EventTime": "2026-02-15T11:00:00Z",
+    "QueryKind": "INSERT",
+    "Query": "insert into db1.table1 values (1)",
+    "User": "u1",
+    "ClientIP": "10.0.0.1",
+    "ReadRows": 0,
+    "WrittenRows": 3,
+    "Duration": 500000000,
+    "Exception": "",
+    "Tables": ["db1.table1"]
+  },
+  {
+    "QueryID": "q3",
+    "Type": "QueryFinish",
+    "EventTime": "2024-01-01T09:00:00Z",
+    "QueryKind": "SELECT",
+    "Query": "select * from db2.table2 join db1.table1",
+    "User": "u2",
+    "ClientIP": "10.0.0.2",
+    "ReadRows": 5,
+    "WrittenRows": 0,
+    "Duration": 2000000000,
+    "Exception": "",
+    "Tables": ["db2.table2", "db1.table1"]
+  }
+]

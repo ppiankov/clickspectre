@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
@@ -53,11 +54,14 @@ func runServe(dir string, port int) error {
 	http.Handle("/", http.FileServer(http.Dir(dir)))
 	addr := fmt.Sprintf(":%d", port)
 
-	fmt.Printf("🚀 ClickSpectre report server started\n")
-	fmt.Printf("📊 View report at: http://localhost:%d\n", port)
-	fmt.Printf("📂 Serving: %s\n", dir)
-	fmt.Printf("\nPress Ctrl+C to stop\n\n")
+	slog.Info("report server started",
+		slog.String("url", "http://localhost:"+strconv.Itoa(port)),
+		slog.String("dir", dir),
+	)
+	slog.Info("server running", slog.String("signal", "Ctrl+C"))
 
-	log.Fatal(http.ListenAndServe(addr, nil))
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		return fmt.Errorf("server stopped: %w", err)
+	}
 	return nil
 }

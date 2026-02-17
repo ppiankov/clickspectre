@@ -2,7 +2,7 @@ package reporter
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -43,7 +43,7 @@ func WriteAssets(outputDir string) error {
 		return fmt.Errorf("failed to copy d3.v7.min.js: %w", err)
 	}
 
-	log.Printf("Static assets written to: %s", outputDir)
+	slog.Debug("static assets written", slog.String("output_dir", outputDir))
 
 	return nil
 }

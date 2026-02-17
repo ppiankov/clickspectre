@@ -1,0 +1,88 @@
+name: ClickSpectre
+description: Analyze ClickHouse table usage and publish SARIF findings.
+author: ppiankov
+
+inputs:
+  clickhouse-url:
+    description: ClickHouse DSN/URL used for analysis.
+    required: true
+  format:
+    description: Output format for ClickSpectre report (`json` or `sarif`).
+    required: false
+    default: sarif
+  fail-on:
+    description: Failure threshold (`none`, `safe`, `likely`, `any`, `anomaly`).
+    required: false
+    default: none
+  args:
+    description: Extra arguments passed to `clickspectre analyze`.
+    required: false
+    default: ""
+  upload-sarif:
+    description: Upload `report.sarif` to GitHub code scanning when format is `sarif`.
+    required: false
+    default: "true"
+  version:
+    description: ClickSpectre release tag to download (for example `v1.0.0` or `latest`).
+    required: false
+    default: latest
+  binary-path:
+    description: Optional local ClickSpectre binary path (mainly for CI/smoke tests).
+    required: false
+    default: ""
+
+outputs:
+  resolved-version:
+    description: Resolved ClickSpectre version (`latest`, explicit tag, or `local`).
+    value: ${{ steps.run.outputs.resolved-version }}
+  report-json:
+    description: Path to generated JSON report (if format=json).
+    value: ${{ steps.run.outputs.report-json }}
+  report-sarif:
+    description: Path to generated SARIF report (if format=sarif).
+    value: ${{ steps.run.outputs.report-sarif }}
+  findings-safe:
+    description: Number of safe-to-drop / zero-usage findings.
+    value: ${{ steps.run.outputs.findings-safe }}
+  findings-likely:
+    description: Number of likely-safe findings.
+    value: ${{ steps.run.outputs.findings-likely }}
+  findings-anomaly:
+    description: Number of anomaly findings.
+    value: ${{ steps.run.outputs.findings-anomaly }}
+  findings-total:
+    description: Total findings across all categories.
+    value: ${{ steps.run.outputs.findings-total }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        GITHUB_ACTION_REF: ${{ github.action_ref }}
+        INPUT_CLICKHOUSE_URL: ${{ inputs.clickhouse-url }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_BINARY_PATH: ${{ inputs.binary-path }}
+      run: bash "$GITHUB_ACTION_PATH/.github/scripts/run-action.sh"
+
+    - name: Upload SARIF
+      if: ${{ inputs.upload-sarif == 'true' && steps.run.outputs.report-sarif != '' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.run.outputs.report-sarif }}
+        category: clickspectre
+
+    - name: Enforce fail-on gate
+      if: ${{ steps.run.outputs.should-fail == 'true' }}
+      shell: bash
+      run: |
+        echo "${{ steps.run.outputs.fail-message }}" >&2
+        exit 1
+
+branding:
+  icon: search
+  color: blue

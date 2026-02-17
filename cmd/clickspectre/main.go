@@ -1,17 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
+	"github.com/ppiankov/clickspectre/internal/logging"
 	"github.com/spf13/cobra"
 )
 
 var (
 	version = "1.0.0-stage1"
+	verbose bool
 )
 
 func main() {
+	logging.Init(false)
+
 	root := &cobra.Command{
 		Use:   "clickspectre",
 		Short: "ClickHouse usage analyzer",
@@ -20,7 +24,12 @@ which tables are used, by whom, and which are safe to clean up.
 
 It generates visual reports with interactive bipartite graphs showing
 service-to-table relationships, usage statistics, and cleanup recommendations.`,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			logging.Init(verbose)
+		},
 	}
+
+	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "Verbose logging")
 
 	root.AddCommand(NewAnalyzeCmd())
 	root.AddCommand(NewServeCmd())
@@ -28,7 +37,7 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.AddCommand(NewVersionCmd())
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		slog.Error("command failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 }

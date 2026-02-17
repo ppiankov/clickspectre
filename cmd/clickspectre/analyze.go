@@ -3,12 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ppiankov/clickspectre/internal/analyzer"
+	"github.com/ppiankov/clickspectre/internal/baseline"
 	"github.com/ppiankov/clickspectre/internal/collector"
 	"github.com/ppiankov/clickspectre/internal/k8s"
+	"github.com/ppiankov/clickspectre/internal/logging"
 	"github.com/ppiankov/clickspectre/internal/models"
 	"github.com/ppiankov/clickspectre/internal/reporter"
 	"github.com/ppiankov/clickspectre/internal/scorer"
@@ -24,16 +29,25 @@ func NewAnalyzeCmd() *cobra.Command {
 	var lookbackStr string
 	var queryTimeoutStr string
 	var k8sCacheTTLStr string
+	var configPath string
 
 	cmd := &cobra.Command{
-		Use:   "analyze",
-		Short: "Analyze ClickHouse usage and generate report",
+		Use:     "analyze",
+		Aliases: []string{"audit"},
+		Short:   "Analyze ClickHouse usage and generate report",
 		Long: `Analyze ClickHouse query logs to determine table usage patterns,
 generate cleanup recommendations, and create an interactive visual report.`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			// Parse custom durations
-			var err error
+			loadedConfigPath, err := applyAnalyzeConfigFileDefaults(cmd, cfg, &queryTimeoutStr, configPath)
+			if err != nil {
+				return err
+			}
 
+			if loadedConfigPath != "" && verbose {
+				slog.Debug("loaded config file", slog.String("path", loadedConfigPath))
+			}
+
+			// Parse custom durations
 			if lookbackStr != "" {
 				cfg.LookbackPeriod, err = config.ParseDuration(lookbackStr)
 				if err != nil {
@@ -55,16 +69,31 @@ generate cleanup recommendations, and create an interactive visual report.`,
 				}
 			}
 
+			if cfg.ClickHouseDSN == "" {
+				return fmt.Errorf("required flag(s) \"clickhouse-dsn\" or \"clickhouse-url\" not set")
+			}
+
+			cfg.Format = strings.ToLower(cfg.Format)
+			cfg.Normalize()
+			switch cfg.Format {
+			case "json", "text", "sarif":
+			default:
+				return fmt.Errorf("invalid --format value: %q (supported: json, text, sarif)", cfg.Format)
+			}
+
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg.Verbose = verbose
 			return runAnalyze(cfg)
 		},
 	}
 
 	// ClickHouse flags
-	cmd.Flags().StringVar(&cfg.ClickHouseDSN, "clickhouse-dsn", "", "ClickHouse DSN (required)")
-	_ = cmd.MarkFlagRequired("clickhouse-dsn") // Error only occurs if flag doesn't exist
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file (default: auto-load .clickspectre.yaml)")
+	cmd.Flags().StringVar(&cfg.ClickHouseDSN, "clickhouse-dsn", "", "ClickHouse DSN")
+	cmd.Flags().StringVar(&cfg.ClickHouseDSN, "clickhouse-url", "", "Deprecated alias for --clickhouse-dsn")
+	_ = cmd.Flags().MarkDeprecated("clickhouse-url", "use --clickhouse-dsn instead")
 
 	cmd.Flags().StringVar(&queryTimeoutStr, "query-timeout", "5m", "Query timeout (e.g., 5m, 10m, 1h)")
 	cmd.Flags().IntVar(&cfg.BatchSize, "batch-size", 100000, "Query log batch size")
@@ -82,7 +111,9 @@ generate cleanup recommendations, and create an interactive visual report.`,
 
 	// Output flags
 	cmd.Flags().StringVar(&cfg.OutputDir, "output", "./report", "Output directory")
-	cmd.Flags().StringVar(&cfg.Format, "format", "json", "Output format (json)")
+	cmd.Flags().StringVar(&cfg.Format, "format", "json", "Output format (json|text|sarif)")
+	cmd.Flags().StringVar(&cfg.BaselinePath, "baseline", "", "Path to baseline file for suppressing known findings")
+	cmd.Flags().BoolVar(&cfg.UpdateBaseline, "update-baseline", false, "Update baseline with current findings")
 
 	// Analysis flags
 	cmd.Flags().StringVar(&cfg.ScoringAlgorithm, "scoring-algorithm", "simple", "Scoring algorithm (simple)")
@@ -90,95 +121,170 @@ generate cleanup recommendations, and create an interactive visual report.`,
 	cmd.Flags().BoolVar(&cfg.IncludeMVDeps, "include-mv-deps", true, "Include materialized view dependencies")
 	cmd.Flags().BoolVar(&cfg.DetectUnusedTables, "detect-unused-tables", false, "Detect tables with zero usage in query logs")
 	cmd.Flags().Float64Var(&cfg.MinTableSizeMB, "min-table-size", 1.0, "Minimum table size in MB for unused table recommendations")
+	cmd.Flags().Uint64Var(&cfg.MinQueryCount, "min-query-count", 0, "Minimum query count required to consider a table active")
+	cmd.Flags().StringSliceVar(&cfg.ExcludeTables, "exclude-table", []string{}, "Exclude table pattern (repeatable, supports glob)")
+	cmd.Flags().StringSliceVar(&cfg.ExcludeDatabases, "exclude-database", []string{}, "Exclude database pattern (repeatable, supports glob)")
 
 	// Operational flags
-	cmd.Flags().BoolVar(&cfg.Verbose, "verbose", false, "Verbose logging")
 	cmd.Flags().BoolVar(&cfg.DryRun, "dry-run", false, "Dry run mode (don't write output)")
 
 	return cmd
 }
 
+func applyAnalyzeConfigFileDefaults(
+	cmd *cobra.Command,
+	cfg *config.Config,
+	queryTimeoutStr *string,
+	configPath string,
+) (string, error) {
+	flags := cmd.Flags()
+
+	var (
+		fileCfg *config.FileConfig
+		path    string
+		err     error
+	)
+
+	if strings.TrimSpace(configPath) != "" {
+		fileCfg, err = config.LoadFile(configPath)
+		if err != nil {
+			return "", err
+		}
+		path = configPath
+	} else {
+		fileCfg, path, err = config.AutoLoadFile()
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if fileCfg == nil {
+		return "", nil
+	}
+
+	if !flags.Changed("clickhouse-dsn") && !flags.Changed("clickhouse-url") {
+		if endpoint := fileCfg.ClickHouseEndpoint(); endpoint != "" {
+			cfg.ClickHouseDSN = endpoint
+		}
+	}
+	if !flags.Changed("format") && fileCfg.Format != "" {
+		cfg.Format = fileCfg.Format
+	}
+	if !flags.Changed("query-timeout") {
+		if timeout := fileCfg.QueryTimeoutValue(); timeout != "" {
+			*queryTimeoutStr = timeout
+		}
+	}
+	if !flags.Changed("exclude-table") && len(fileCfg.ExcludeTables) > 0 {
+		cfg.ExcludeTables = append([]string(nil), fileCfg.ExcludeTables...)
+	}
+	if !flags.Changed("exclude-database") && len(fileCfg.ExcludeDatabases) > 0 {
+		cfg.ExcludeDatabases = append([]string(nil), fileCfg.ExcludeDatabases...)
+	}
+	if !flags.Changed("min-query-count") && fileCfg.MinQueryCount != nil {
+		cfg.MinQueryCount = *fileCfg.MinQueryCount
+	}
+	if !flags.Changed("min-table-size") && fileCfg.MinTableSizeMB != nil {
+		cfg.MinTableSizeMB = *fileCfg.MinTableSizeMB
+	}
+
+	return path, nil
+}
+
 // runAnalyze executes the analysis workflow
 func runAnalyze(cfg *config.Config) error {
+	logging.Init(cfg.Verbose)
+
 	startTime := time.Now()
 	ctx := context.Background()
 
-	if cfg.Verbose {
-		log.SetFlags(log.LstdFlags | log.Lshortfile)
-		log.Printf("Starting ClickSpectre analysis with configuration:")
-		log.Printf("  ClickHouse DSN: %s", maskDSN(cfg.ClickHouseDSN))
-		log.Printf("  Lookback: %s", cfg.LookbackPeriod)
-		log.Printf("  Concurrency: %d", cfg.Concurrency)
-		log.Printf("  Batch size: %d", cfg.BatchSize)
-		log.Printf("  Max rows: %d", cfg.MaxRows)
-		log.Printf("  K8s resolution: %v", cfg.ResolveK8s)
-	}
+	slog.Debug("starting analysis",
+		slog.String("clickhouse_dsn", maskDSN(cfg.ClickHouseDSN)),
+		slog.Duration("lookback", cfg.LookbackPeriod),
+		slog.Int("concurrency", cfg.Concurrency),
+		slog.Int("batch_size", cfg.BatchSize),
+		slog.Int("max_rows", cfg.MaxRows),
+		slog.String("k8s_resolution", strconv.FormatBool(cfg.ResolveK8s)),
+	)
+	logConnectionSettings(cfg)
 
 	// 1. Initialize collector
-	fmt.Println("🔌 Connecting to ClickHouse...")
+	slog.Info("connecting to ClickHouse", slog.String("dsn", maskDSN(cfg.ClickHouseDSN)))
 	col, err := collector.New(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create collector: %w", err)
 	}
-	defer col.Close()
+	defer func() { _ = col.Close() }()
 
 	// 2. Initialize K8s resolver (if enabled)
 	var resolver *k8s.Resolver
 	if cfg.ResolveK8s {
-		fmt.Println("☸️  Connecting to Kubernetes...")
+		slog.Info("connecting to Kubernetes", slog.String("kubeconfig", cfg.KubeConfig))
 		resolver, err = k8s.NewResolver(cfg)
 		if err != nil {
-			log.Printf("Warning: Failed to initialize K8s resolver: %v", err)
-			log.Printf("Continuing without Kubernetes resolution...")
+			slog.Error("failed to initialize Kubernetes resolver",
+				slog.String("error", err.Error()),
+				slog.String("fallback", "continuing without Kubernetes resolution"),
+			)
 			cfg.ResolveK8s = false
 		}
 	}
 
 	// 3. Collect query logs
-	fmt.Println("📊 Collecting query logs...")
+	slog.Info("collecting query logs",
+		slog.Duration("lookback", cfg.LookbackPeriod),
+		slog.Int("batch_size", cfg.BatchSize),
+	)
 	entries, err := col.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to collect query logs: %w", err)
 	}
-	fmt.Printf("✓ Collected %d query log entries\n", len(entries))
+	slog.Info("collected query log entries", slog.Int("count", len(entries)))
 
 	// 4. Analyze data
-	fmt.Println("🔍 Analyzing data...")
+	slog.Info("analyzing data", slog.Int("entries", len(entries)))
 	an := analyzer.New(cfg, resolver, col)
 	if err := an.Analyze(ctx, entries); err != nil {
 		return fmt.Errorf("failed to analyze data: %w", err)
 	}
-	fmt.Printf("✓ Analyzed %d tables, %d services, %d edges\n",
-		len(an.Tables()), len(an.Services()), len(an.Edges()))
+	slog.Info("analysis complete",
+		slog.Int("tables", len(an.Tables())),
+		slog.Int("services", len(an.Services())),
+		slog.Int("edges", len(an.Edges())),
+	)
 
 	// 5. Score tables and generate recommendations
-	fmt.Println("🎯 Scoring tables...")
+	slog.Info("scoring tables", slog.Int("tables", len(an.Tables())))
 	recommendations := scorer.GenerateRecommendations(an.Tables(), an.Services(), cfg)
-	fmt.Printf("✓ Recommendations: %d safe to drop, %d likely safe, %d keep\n",
-		len(recommendations.SafeToDrop), len(recommendations.LikelySafe), len(recommendations.Keep))
+	slog.Info("recommendations generated",
+		slog.Int("safe_to_drop", len(recommendations.SafeToDrop)),
+		slog.Int("likely_safe", len(recommendations.LikelySafe)),
+		slog.Int("keep", len(recommendations.Keep)),
+	)
 
 	// 6. Build report
 	report := buildReport(cfg, entries, an, recommendations, startTime)
 
-	// 7. Write output
+	// 7. Apply baseline (if enabled)
+	if err := applyBaseline(cfg, report); err != nil {
+		return err
+	}
+
+	// 8. Write output
 	if !cfg.DryRun {
-		fmt.Println("📝 Writing report...")
+		slog.Info("writing report", slog.String("output_dir", cfg.OutputDir))
 		rep := reporter.New(cfg)
 		if err := rep.Generate(report); err != nil {
 			return fmt.Errorf("failed to generate report: %w", err)
 		}
-		fmt.Printf("✓ Report written to: %s\n", cfg.OutputDir)
+		slog.Info("report written", slog.String("output_dir", cfg.OutputDir))
 	} else {
-		fmt.Println("🏃 Dry run mode - skipping output")
+		slog.Info("dry run enabled", slog.String("output_dir", cfg.OutputDir))
 	}
 
-	// 8. Success
+	// 9. Success
 	duration := time.Since(startTime)
-	fmt.Printf("\n✅ Analysis complete in %s!\n", duration.Round(time.Second))
-	if !cfg.DryRun {
-		fmt.Printf("\n📊 View report:\n")
-		fmt.Printf("   clickspectre serve %s\n", cfg.OutputDir)
-	}
+	logAnalysisSummary(cfg, report, duration)
 
 	return nil
 }
@@ -191,6 +297,8 @@ func buildReport(
 	recommendations models.CleanupRecommendations,
 	startTime time.Time,
 ) *models.Report {
+	generatedAt := time.Now().UTC()
+
 	// Convert maps to slices
 	var tables []models.Table
 	for _, table := range an.Tables() {
@@ -216,8 +324,11 @@ func buildReport(
 	host := extractHost(cfg.ClickHouseDSN)
 
 	return &models.Report{
+		Tool:      "clickspectre",
+		Version:   version,
+		Timestamp: generatedAt.Format(time.RFC3339),
 		Metadata: models.Metadata{
-			GeneratedAt:          time.Now(),
+			GeneratedAt:          generatedAt,
 			LookbackDays:         int(cfg.LookbackPeriod.Hours() / 24),
 			ClickHouseHost:       host,
 			TotalQueriesAnalyzed: uint64(len(entries)),
@@ -244,10 +355,19 @@ func maskDSN(dsn string) string {
 
 // extractHost extracts host from DSN
 func extractHost(dsn string) string {
-	// Simple extraction - could be improved
-	if len(dsn) > 10 {
-		return dsn[:min(50, len(dsn))]
+	if dsn == "" {
+		return "unknown"
 	}
+
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		return "unknown"
+	}
+
+	if host := parsed.Hostname(); host != "" {
+		return host
+	}
+
 	return "unknown"
 }
 
@@ -256,4 +376,130 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func logConnectionSettings(cfg *config.Config) {
+	slog.Debug("connection settings",
+		slog.String("clickhouse_host", extractHost(cfg.ClickHouseDSN)),
+		slog.Duration("lookback", cfg.LookbackPeriod),
+		slog.Duration("query_timeout", cfg.QueryTimeout),
+	)
+}
+
+type analysisSummary struct {
+	clickHouseHost string
+	databaseCount  int
+	tableCount     int
+	serviceCount   int
+	queryCount     uint64
+	findingCount   int
+}
+
+func buildAnalysisSummary(report *models.Report) analysisSummary {
+	host := report.Metadata.ClickHouseHost
+	if host == "" {
+		host = "unknown"
+	}
+
+	return analysisSummary{
+		clickHouseHost: host,
+		databaseCount:  countDatabases(report.Tables),
+		tableCount:     len(report.Tables),
+		serviceCount:   len(report.Services),
+		queryCount:     report.Metadata.TotalQueriesAnalyzed,
+		findingCount:   countFindings(report),
+	}
+}
+
+func logAnalysisSummary(cfg *config.Config, report *models.Report, duration time.Duration) {
+	summary := buildAnalysisSummary(report)
+	message := "analysis completed with findings"
+	if summary.findingCount == 0 {
+		message = "analysis completed with no findings"
+	}
+
+	attrs := []any{
+		slog.String("clickhouse_host", summary.clickHouseHost),
+		slog.Int("database_count", summary.databaseCount),
+		slog.Int("table_count", summary.tableCount),
+		slog.Int("service_count", summary.serviceCount),
+		slog.Uint64("query_count", summary.queryCount),
+		slog.Int("finding_count", summary.findingCount),
+		slog.Duration("duration", duration.Round(time.Second)),
+		slog.Bool("dry_run", cfg.DryRun),
+	}
+	if !cfg.DryRun {
+		attrs = append(attrs, slog.String("output_dir", cfg.OutputDir))
+	}
+
+	slog.Info(message, attrs...)
+}
+
+func countDatabases(tables []models.Table) int {
+	unique := make(map[string]struct{})
+	for _, table := range tables {
+		database := strings.TrimSpace(table.Database)
+		if database == "" && strings.Contains(table.FullName, ".") {
+			parts := strings.SplitN(table.FullName, ".", 2)
+			database = strings.TrimSpace(parts[0])
+		}
+		if database == "" {
+			continue
+		}
+		unique[database] = struct{}{}
+	}
+	return len(unique)
+}
+
+func countFindings(report *models.Report) int {
+	recommendationFindings := len(report.CleanupRecommendations.ZeroUsageNonReplicated) +
+		len(report.CleanupRecommendations.ZeroUsageReplicated) +
+		len(report.CleanupRecommendations.SafeToDrop) +
+		len(report.CleanupRecommendations.LikelySafe)
+
+	return recommendationFindings + len(report.Anomalies)
+}
+
+func applyBaseline(cfg *config.Config, report *models.Report) error {
+	if !cfg.UpdateBaseline && cfg.BaselinePath == "" {
+		return nil
+	}
+
+	baselinePath := cfg.BaselinePath
+	if baselinePath == "" {
+		baselinePath = baseline.DefaultPath
+	}
+
+	known, err := baseline.Load(baselinePath)
+	if err != nil {
+		return fmt.Errorf("failed to load baseline: %w", err)
+	}
+
+	suppressed, remaining := baseline.SuppressKnown(report, known)
+	if suppressed > 0 {
+		slog.Info("suppressed known findings",
+			slog.Int("suppressed", suppressed),
+			slog.Int("remaining", remaining),
+			slog.String("baseline", baselinePath),
+		)
+	}
+
+	if !cfg.UpdateBaseline {
+		return nil
+	}
+
+	newFingerprints := baseline.CollectFingerprints(report)
+	baseline.AddAll(known, newFingerprints)
+
+	if err := baseline.Save(baselinePath, known); err != nil {
+		return fmt.Errorf("failed to save baseline: %w", err)
+	}
+
+	slog.Info("baseline updated",
+		slog.String("path", baselinePath),
+		slog.Int("fingerprints", len(known)),
+		slog.Int("added", len(newFingerprints)),
+	)
+
+	return nil
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -48,7 +48,7 @@ func NewClickHouseClient(cfg *config.Config) (*ClickHouseClient, error) {
 	}
 
 	if cfg.Verbose {
-		log.Printf("Successfully connected to ClickHouse: %s", opts.Addr[0])
+		slog.Debug("connected to ClickHouse", slog.String("addr", opts.Addr[0]))
 	}
 
 	return &ClickHouseClient{
@@ -65,16 +65,16 @@ func (c *ClickHouseClient) CheckSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to describe query_log: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
-	log.Printf("ClickHouse system.query_log schema:")
+	slog.Debug("ClickHouse system.query_log schema", slog.String("table", "system.query_log"))
 	for rows.Next() {
 		var name, typ, defaultType, defaultExpr, comment, codecExpr, ttlExpr string
 		if err := rows.Scan(&name, &typ, &defaultType, &defaultExpr, &comment, &codecExpr, &ttlExpr); err != nil {
-			log.Printf("  (failed to scan schema row: %v)", err)
+			slog.Debug("failed to scan schema row", slog.String("error", err.Error()))
 			continue
 		}
-		log.Printf("  - %s: %s", name, typ)
+		slog.Debug("schema column", slog.String("name", name), slog.String("type", typ))
 	}
 
 	return nil
@@ -83,11 +83,13 @@ func (c *ClickHouseClient) CheckSchema(ctx context.Context) error {
 // FetchQueryLogs retrieves query logs with pagination
 func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Config, pool *WorkerPool) ([]*models.QueryLogEntry, error) {
 	lookbackDays := int(cfg.LookbackPeriod.Hours() / 24)
+	queryCtx, cancel := withTotalTimeoutContext(ctx, cfg.QueryTimeout)
+	defer cancel()
 
 	// Check schema if verbose mode
 	if cfg.Verbose {
-		if err := c.CheckSchema(ctx); err != nil {
-			log.Printf("Warning: failed to check schema: %v", err)
+		if err := c.CheckSchema(queryCtx); err != nil {
+			slog.Debug("failed to check schema", slog.String("error", err.Error()))
 		}
 	}
 
@@ -117,15 +119,18 @@ func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Confi
 	totalProcessed := 0
 
 	for {
-		// Don't use WithTimeout for readonly users - just use parent context
-		// The readonly mode doesn't allow setting max_execution_time
-		rows, err := c.conn.QueryContext(ctx, query, lookbackDays, cfg.BatchSize, offset)
+		var rows *sql.Rows
+		err := executeWithRetry(queryCtx, defaultRetryConfig(), func() error {
+			var queryErr error
+			rows, queryErr = c.conn.QueryContext(queryCtx, query, lookbackDays, cfg.BatchSize, offset)
+			return queryErr
+		})
 		if err != nil {
 			return nil, fmt.Errorf("query failed at offset %d: %w", offset, err)
 		}
 
 		batch, err := c.processBatch(rows)
-		rows.Close()
+		_ = rows.Close()
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to process batch at offset %d: %w", offset, err)
@@ -139,13 +144,16 @@ func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Confi
 		totalProcessed += len(batch)
 
 		if cfg.Verbose {
-			log.Printf("Processed %d query log entries (total: %d)", len(batch), totalProcessed)
+			slog.Debug("processed query log entries",
+				slog.Int("batch_count", len(batch)),
+				slog.Int("total_processed", totalProcessed),
+			)
 		}
 
 		// Check max rows limit
 		if totalProcessed >= cfg.MaxRows {
 			if cfg.Verbose {
-				log.Printf("Max rows limit (%d) reached, stopping collection", cfg.MaxRows)
+				slog.Debug("max rows limit reached", slog.Int("max_rows", cfg.MaxRows))
 			}
 			break
 		}
@@ -159,7 +167,7 @@ func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Confi
 	}
 
 	if cfg.Verbose {
-		log.Printf("Total query log entries collected: %d", len(allEntries))
+		slog.Debug("total query log entries collected", slog.Int("total_entries", len(allEntries)))
 	}
 
 	return allEntries, nil
@@ -193,11 +201,16 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 			skippedRows++
 			// Always log the first error to help diagnose the issue
 			if skippedRows == 1 {
-				log.Printf("ERROR: Failed to scan first row: %v", err)
-				log.Printf("This suggests a column type mismatch. Run with --verbose for details.")
+				slog.Error("failed to scan first row",
+					slog.String("error", err.Error()),
+					slog.String("hint", "column type mismatch; run with --verbose for details"),
+				)
 			}
 			if c.config.Verbose {
-				log.Printf("Warning: failed to scan row %d: %v (skipping)", rowNum, err)
+				slog.Debug("failed to scan row",
+					slog.Int("row", rowNum),
+					slog.String("error", err.Error()),
+				)
 			}
 			// Try to skip this row and continue
 			continue
@@ -207,7 +220,7 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 		if entry.QueryID == "" || entry.Query == "" {
 			skippedRows++
 			if c.config.Verbose {
-				log.Printf("Warning: row %d has empty essential fields (skipping)", rowNum)
+				slog.Debug("row has empty essential fields", slog.Int("row", rowNum))
 			}
 			continue
 		}
@@ -215,7 +228,10 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 		// Truncate extremely long queries (handle in Go instead of SQL)
 		if len(entry.Query) > 100000 {
 			if c.config.Verbose {
-				log.Printf("Warning: row %d has very long query (%d chars), truncating", rowNum, len(entry.Query))
+				slog.Debug("row has very long query, truncating",
+					slog.Int("row", rowNum),
+					slog.Int("query_chars", len(entry.Query)),
+				)
 			}
 			entry.Query = entry.Query[:100000] + "... [truncated]"
 		}
@@ -227,26 +243,36 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 			defer func() {
 				if r := recover(); r != nil {
 					if c.config.Verbose {
-						log.Printf("Warning: panic while extracting tables from row %d: %v", rowNum, r)
+						slog.Debug("panic while extracting tables",
+							slog.Int("row", rowNum),
+							slog.String("panic", fmt.Sprint(r)),
+						)
 					}
 					entry.Tables = []string{}
 				}
 			}()
 			entry.Tables = extractTables(entry.Query)
 		}()
+		entry.Tables = c.filterExcludedTables(entry.Tables)
 
 		entries = append(entries, &entry)
 	}
 
 	if skippedRows > 0 {
-		log.Printf("Skipped %d problematic rows out of %d total", skippedRows, rowNum)
+		slog.Error("skipped problematic rows",
+			slog.Int("skipped_rows", skippedRows),
+			slog.Int("total_rows", rowNum),
+		)
 	}
 
 	// Check for iteration errors
 	if err := rows.Err(); err != nil {
 		// If we got some entries, return them with a warning rather than failing completely
 		if len(entries) > 0 {
-			log.Printf("Warning: error during row iteration (recovered %d entries): %v", len(entries), err)
+			slog.Error("error during row iteration",
+				slog.Int("recovered_entries", len(entries)),
+				slog.String("error", err.Error()),
+			)
 			return entries, nil
 		}
 		return nil, err
@@ -329,7 +355,7 @@ func (c *ClickHouseClient) FetchTableMetadata(ctx context.Context) (map[string]*
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch table metadata: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	tables := make(map[string]*models.Table)
 
@@ -340,11 +366,16 @@ func (c *ClickHouseClient) FetchTableMetadata(ctx context.Context) (map[string]*
 		var depDatabases, depTables sql.NullString
 
 		if err := rows.Scan(&database, &name, &engine, &totalBytes, &totalRows, &createTime, &depDatabases, &depTables); err != nil {
-			log.Printf("Warning: failed to scan table metadata: %v", err)
+			if c.config.Verbose {
+				slog.Debug("failed to scan table metadata", slog.String("error", err.Error()))
+			}
 			continue
 		}
 
 		fullName := database + "." + name
+		if c.config.IsTableExcluded(fullName) {
+			continue
+		}
 
 		// Convert NULL-safe integers to uint64
 		var bytesValue, rowsValue uint64
@@ -385,6 +416,22 @@ func (c *ClickHouseClient) FetchTableMetadata(ctx context.Context) (map[string]*
 	}
 
 	return tables, rows.Err()
+}
+
+func (c *ClickHouseClient) filterExcludedTables(tableNames []string) []string {
+	if len(tableNames) == 0 {
+		return []string{}
+	}
+
+	filtered := make([]string, 0, len(tableNames))
+	for _, tableName := range tableNames {
+		if tableName == "" || c.config.IsTableExcluded(tableName) {
+			continue
+		}
+		filtered = append(filtered, tableName)
+	}
+
+	return filtered
 }
 
 // Close closes the ClickHouse connection

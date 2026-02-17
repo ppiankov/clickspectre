@@ -1,6 +1,9 @@
 package reporter
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/ppiankov/clickspectre/internal/models"
 	"github.com/ppiankov/clickspectre/pkg/config"
 )
@@ -25,14 +28,24 @@ func New(cfg *config.Config) Reporter {
 
 // Generate generates the report
 func (r *reporter) Generate(report *models.Report) error {
-	// Write JSON report
-	if err := WriteJSON(report, r.config); err != nil {
-		return err
-	}
-
-	// Write static assets
-	if err := r.WriteAssets(); err != nil {
-		return err
+	switch strings.ToLower(r.config.Format) {
+	case "json":
+		if err := WriteJSON(report, r.config); err != nil {
+			return err
+		}
+		if err := r.WriteAssets(); err != nil {
+			return err
+		}
+	case "text":
+		if err := WriteText(report, r.config); err != nil {
+			return err
+		}
+	case "sarif":
+		if err := WriteSARIF(report, r.config); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported format %q", r.config.Format)
 	}
 
 	return nil

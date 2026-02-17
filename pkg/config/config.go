@@ -5,11 +5,14 @@ import "time"
 // Config holds all runtime configuration
 type Config struct {
 	// ClickHouse settings
-	ClickHouseDSN  string
-	QueryTimeout   time.Duration
-	BatchSize      int
-	MaxRows        int
-	LookbackPeriod time.Duration
+	ClickHouseDSN    string
+	QueryTimeout     time.Duration
+	BatchSize        int
+	MaxRows          int
+	LookbackPeriod   time.Duration
+	MinQueryCount    uint64
+	ExcludeTables    []string
+	ExcludeDatabases []string
 
 	// Kubernetes settings
 	ResolveK8s   bool
@@ -23,6 +26,10 @@ type Config struct {
 	// Output settings
 	OutputDir string
 	Format    string
+
+	// Baseline settings
+	BaselinePath   string
+	UpdateBaseline bool
 
 	// Analysis settings
 	ScoringAlgorithm   string
@@ -46,12 +53,17 @@ func DefaultConfig() *Config {
 		BatchSize:          100000,
 		MaxRows:            1000000,
 		LookbackPeriod:     30 * 24 * time.Hour, // 30 days
+		MinQueryCount:      0,
+		ExcludeTables:      []string{},
+		ExcludeDatabases:   []string{},
 		ResolveK8s:         false,
 		K8sCacheTTL:        5 * time.Minute,
 		K8sRateLimit:       10,
 		Concurrency:        5,
 		OutputDir:          "./report",
 		Format:             "json",
+		BaselinePath:       "",
+		UpdateBaseline:     false,
 		ScoringAlgorithm:   "simple",
 		AnomalyDetection:   true,
 		IncludeMVDeps:      true,

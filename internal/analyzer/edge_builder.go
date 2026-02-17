@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/ppiankov/clickspectre/internal/models"
 )
@@ -30,6 +30,9 @@ func (a *Analyzer) buildEdges(entries []*models.QueryLogEntry) error {
 
 		for _, tableName := range entry.Tables {
 			if tableName == "" {
+				continue
+			}
+			if a.config.IsTableExcluded(tableName) {
 				continue
 			}
 
@@ -71,7 +74,7 @@ func (a *Analyzer) buildEdges(entries []*models.QueryLogEntry) error {
 	}
 
 	if a.config.Verbose {
-		log.Printf("Built %d service→table edges", len(a.edges))
+		slog.Debug("built service to table edges", slog.Int("count", len(a.edges)))
 	}
 
 	return nil

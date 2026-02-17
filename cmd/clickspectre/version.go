@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"runtime"
 
 	"github.com/spf13/cobra"
@@ -13,9 +12,9 @@ func NewVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Show version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("ClickSpectre %s\n", version)
-			fmt.Printf("Go version: %s\n", runtime.Version())
-			fmt.Printf("OS/Arch: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+			cmd.Println(version)
+			cmd.Printf("go: %s\n", runtime.Version())
+			cmd.Printf("platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		},
 	}
 }

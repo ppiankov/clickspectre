@@ -3,7 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/ppiankov/clickspectre/internal/k8s"
@@ -43,7 +43,7 @@ func New(cfg *config.Config, resolver *k8s.Resolver, collector CollectorInterfac
 // Analyze processes query log entries and builds all data models
 func (a *Analyzer) Analyze(ctx context.Context, entries []*models.QueryLogEntry) error {
 	if a.config.Verbose {
-		log.Printf("Starting analysis of %d query log entries", len(entries))
+		slog.Debug("starting analysis", slog.Int("query_entries", len(entries)))
 	}
 
 	// 1. Build table usage model
@@ -81,8 +81,12 @@ func (a *Analyzer) Analyze(ctx context.Context, entries []*models.QueryLogEntry)
 	}
 
 	if a.config.Verbose {
-		log.Printf("Analysis complete: %d tables, %d services, %d edges, %d anomalies",
-			len(a.tables), len(a.services), len(a.edges), len(a.anomalies))
+		slog.Debug("analysis complete",
+			slog.Int("tables", len(a.tables)),
+			slog.Int("services", len(a.services)),
+			slog.Int("edges", len(a.edges)),
+			slog.Int("anomalies", len(a.anomalies)),
+		)
 	}
 
 	return nil
@@ -112,7 +116,7 @@ func (a *Analyzer) Anomalies() []*models.Anomaly {
 // This detects tables that have zero usage in the query logs
 func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
 	if a.config.Verbose {
-		log.Printf("Fetching complete table inventory from system.tables")
+		slog.Debug("fetching complete table inventory", slog.String("source", "system.tables"))
 	}
 
 	// 1. Fetch complete table inventory from system.tables
@@ -122,12 +126,16 @@ func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
 	}
 
 	if a.config.Verbose {
-		log.Printf("Found %d tables in ClickHouse", len(allTables))
+		slog.Debug("table inventory fetched", slog.Int("tables", len(allTables)))
 	}
 
 	// 2. Merge with existing usage data
 	zeroUsageCount := 0
 	for fullName, metaTable := range allTables {
+		if a.config.IsTableExcluded(fullName) {
+			continue
+		}
+
 		if existing, found := a.tables[fullName]; found {
 			// Table HAS usage - enrich with metadata
 			existing.Engine = metaTable.Engine
@@ -152,7 +160,10 @@ func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
 	}
 
 	if a.config.Verbose {
-		log.Printf("Enriched with %d total tables, %d with zero usage", len(a.tables), zeroUsageCount)
+		slog.Debug("table inventory enrichment complete",
+			slog.Int("total_tables", len(a.tables)),
+			slog.Int("zero_usage_tables", zeroUsageCount),
+		)
 	}
 
 	return nil

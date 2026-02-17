@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -83,12 +84,11 @@ func runDeploy(kubeconfigPath, namespace, reportDir string, localPort int, openB
 		return fmt.Errorf("report.json not found in %s", reportDir)
 	}
 
-	fmt.Println("🚀 ClickSpectre Kubernetes Deployment")
-	fmt.Println("=====================================")
-	fmt.Printf("📂 Report: %s\n", reportDir)
-	fmt.Printf("☸️  Namespace: %s\n", namespace)
-	fmt.Printf("🔌 Local port: %d\n", localPort)
-	fmt.Println()
+	slog.Info("starting Kubernetes deployment",
+		slog.String("report_dir", reportDir),
+		slog.String("namespace", namespace),
+		slog.Int("local_port", localPort),
+	)
 
 	// Load kubeconfig
 	if kubeconfigPath == "" {
@@ -110,56 +110,65 @@ func runDeploy(kubeconfigPath, namespace, reportDir string, localPort int, openB
 	}
 
 	// 1. Create namespace if it doesn't exist
-	fmt.Printf("📦 Ensuring namespace '%s' exists...\n", namespace)
+	slog.Info("ensuring namespace exists", slog.String("namespace", namespace))
 	if err := createNamespaceIfNotExists(ctx, clientset, namespace); err != nil {
 		return fmt.Errorf("failed to create namespace: %w", err)
 	}
 
 	// 2. Create ConfigMap from report files
-	fmt.Println("📤 Creating ConfigMap from report files...")
+	slog.Info("creating ConfigMap from report files",
+		slog.String("namespace", namespace),
+		slog.String("name", configMapName),
+	)
 	if err := createConfigMapFromDirectory(ctx, clientset, namespace, reportDir); err != nil {
 		return fmt.Errorf("failed to create ConfigMap: %w", err)
 	}
 
 	// 3. Create Deployment
-	fmt.Println("🚢 Deploying report server...")
+	slog.Info("deploying report server",
+		slog.String("namespace", namespace),
+		slog.String("name", deploymentName),
+	)
 	if err := createDeployment(ctx, clientset, namespace); err != nil {
 		return fmt.Errorf("failed to create deployment: %w", err)
 	}
 
 	// 4. Create Service
-	fmt.Println("🌐 Creating Service...")
+	slog.Info("creating Service",
+		slog.String("namespace", namespace),
+		slog.String("name", serviceName),
+	)
 	if err := createService(ctx, clientset, namespace); err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}
 
 	// 5. Create Ingress (if host specified)
 	if ingressHost != "" {
-		fmt.Printf("🔗 Creating Ingress for %s...\n", ingressHost)
+		slog.Info("creating Ingress", slog.String("host", ingressHost))
 		if err := createIngress(ctx, clientset, namespace, ingressHost); err != nil {
-			log.Printf("Warning: Failed to create Ingress: %v", err)
+			slog.Error("failed to create Ingress", slog.String("error", err.Error()))
 		}
 	}
 
 	// 6. Wait for deployment to be ready
-	fmt.Println("⏳ Waiting for deployment to be ready...")
+	slog.Info("waiting for deployment to be ready", slog.Duration("timeout", 60*time.Second))
 	if err := waitForDeployment(ctx, clientset, namespace, 60*time.Second); err != nil {
 		return fmt.Errorf("deployment failed to become ready: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Println("✅ Deployment complete!")
-	fmt.Println()
+	slog.Info("deployment complete", slog.String("namespace", namespace))
 
 	// 7. Set up port-forward
-	fmt.Printf("🔌 Setting up port-forward to localhost:%d...\n", localPort)
-	fmt.Printf("   (Press Ctrl+C to stop)\n")
-	fmt.Println()
+	slog.Info("setting up port-forward",
+		slog.String("url", "http://localhost:"+strconv.Itoa(localPort)),
+	)
+	slog.Info("port-forward running", slog.String("signal", "Ctrl+C"))
 
 	if ingressHost != "" {
-		fmt.Printf("🌍 External access: http://%s\n", ingressHost)
-		fmt.Printf("   (Note: DNS and Ingress controller must be configured)\n")
-		fmt.Println()
+		slog.Info("external access available",
+			slog.String("url", "http://"+ingressHost),
+			slog.String("note", "DNS and Ingress controller must be configured"),
+		)
 	}
 
 	// Start port-forward
@@ -168,14 +177,14 @@ func runDeploy(kubeconfigPath, namespace, reportDir string, localPort int, openB
 
 	go func() {
 		if err := portForward(config, namespace, localPort, stopCh, readyCh); err != nil {
-			log.Printf("Port-forward error: %v", err)
+			slog.Error("port-forward error", slog.String("error", err.Error()))
 		}
 	}()
 
 	// Wait for port-forward to be ready
 	select {
 	case <-readyCh:
-		fmt.Printf("✅ Port-forward ready at http://localhost:%d\n", localPort)
+		slog.Info("port-forward ready", slog.String("url", "http://localhost:"+strconv.Itoa(localPort)))
 	case <-time.After(10 * time.Second):
 		return fmt.Errorf("timeout waiting for port-forward to be ready")
 	}
@@ -183,10 +192,10 @@ func runDeploy(kubeconfigPath, namespace, reportDir string, localPort int, openB
 	// Open browser
 	if openBrowser {
 		time.Sleep(1 * time.Second)
-		url := fmt.Sprintf("http://localhost:%d", localPort)
-		fmt.Printf("🌐 Opening browser: %s\n", url)
+		url := "http://localhost:" + strconv.Itoa(localPort)
+		slog.Info("opening browser", slog.String("url", url))
 		if err := openURL(url); err != nil {
-			log.Printf("Failed to open browser: %v", err)
+			slog.Error("failed to open browser", slog.String("error", err.Error()))
 		}
 	}
 
@@ -210,9 +219,9 @@ func createNamespaceIfNotExists(ctx context.Context, clientset *kubernetes.Clien
 	}
 
 	if errors.IsAlreadyExists(err) {
-		fmt.Printf("   Namespace '%s' already exists\n", namespace)
+		slog.Info("namespace already exists", slog.String("namespace", namespace))
 	} else {
-		fmt.Printf("   ✓ Created namespace '%s'\n", namespace)
+		slog.Info("namespace created", slog.String("namespace", namespace))
 	}
 
 	return nil
@@ -241,7 +250,10 @@ func createConfigMapFromDirectory(ctx context.Context, clientset *kubernetes.Cli
 					path := filepath.Join(subdir, subentry.Name())
 					content, err := os.ReadFile(path)
 					if err != nil {
-						log.Printf("Warning: Failed to read %s: %v", path, err)
+						slog.Debug("failed to read report file",
+							slog.String("path", path),
+							slog.String("error", err.Error()),
+						)
 						continue
 					}
 					key := filepath.Join(entry.Name(), subentry.Name())
@@ -252,7 +264,10 @@ func createConfigMapFromDirectory(ctx context.Context, clientset *kubernetes.Cli
 			path := filepath.Join(dir, entry.Name())
 			content, err := os.ReadFile(path)
 			if err != nil {
-				log.Printf("Warning: Failed to read %s: %v", path, err)
+				slog.Debug("failed to read report file",
+					slog.String("path", path),
+					slog.String("error", err.Error()),
+				)
 				continue
 			}
 			data[entry.Name()] = string(content)
@@ -279,7 +294,10 @@ func createConfigMapFromDirectory(ctx context.Context, clientset *kubernetes.Cli
 		return err
 	}
 
-	fmt.Printf("   ✓ Created ConfigMap with %d files\n", len(data))
+	slog.Info("ConfigMap created",
+		slog.String("name", configMapName),
+		slog.Int("file_count", len(data)),
+	)
 	return nil
 }
 
@@ -366,7 +384,7 @@ func createDeployment(ctx context.Context, clientset *kubernetes.Clientset, name
 		return err
 	}
 
-	fmt.Printf("   ✓ Created deployment '%s'\n", deploymentName)
+	slog.Info("deployment created", slog.String("name", deploymentName))
 	return nil
 }
 
@@ -408,7 +426,7 @@ func createService(ctx context.Context, clientset *kubernetes.Clientset, namespa
 		return err
 	}
 
-	fmt.Printf("   ✓ Created service '%s'\n", serviceName)
+	slog.Info("service created", slog.String("name", serviceName))
 	return nil
 }
 
@@ -462,7 +480,7 @@ func createIngress(ctx context.Context, clientset *kubernetes.Clientset, namespa
 		return err
 	}
 
-	fmt.Printf("   ✓ Created ingress for host '%s'\n", host)
+	slog.Info("ingress created", slog.String("host", host))
 	return nil
 }
 
@@ -477,7 +495,10 @@ func waitForDeployment(ctx context.Context, clientset *kubernetes.Clientset, nam
 		}
 
 		if deployment.Status.ReadyReplicas > 0 {
-			fmt.Printf("   ✓ Deployment is ready (%d/%d replicas)\n", deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+			slog.Info("deployment ready",
+				slog.Int("ready_replicas", int(deployment.Status.ReadyReplicas)),
+				slog.Int("desired_replicas", int(*deployment.Spec.Replicas)),
+			)
 			return nil
 		}
 
