@@ -3,7 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/ppiankov/clickspectre/pkg/config"
@@ -42,7 +42,11 @@ func (r *Resolver) ResolveIP(ctx context.Context, ip string) (*ServiceInfo, erro
 	// 1. Check cache first
 	if cached := r.cache.Get(ip); cached != nil {
 		if r.config.Verbose {
-			log.Printf("Cache hit for IP %s: %s/%s", ip, cached.Namespace, cached.Service)
+			slog.Debug("cache hit for IP",
+				slog.String("ip", ip),
+				slog.String("namespace", cached.Namespace),
+				slog.String("service", cached.Service),
+			)
 		}
 		return cached, nil
 	}
@@ -57,7 +61,10 @@ func (r *Resolver) ResolveIP(ctx context.Context, ip string) (*ServiceInfo, erro
 	if err != nil {
 		// Graceful fallback: return IP as-is
 		if r.config.Verbose {
-			log.Printf("Failed to resolve IP %s: %v (falling back to raw IP)", ip, err)
+			slog.Debug("failed to resolve IP, falling back to raw IP",
+				slog.String("ip", ip),
+				slog.String("error", err.Error()),
+			)
 		}
 		fallback := &ServiceInfo{
 			Service:   ip,
@@ -73,7 +80,12 @@ func (r *Resolver) ResolveIP(ctx context.Context, ip string) (*ServiceInfo, erro
 	r.cache.Set(ip, info)
 
 	if r.config.Verbose {
-		log.Printf("Resolved IP %s → %s/%s (pod: %s)", ip, info.Namespace, info.Service, info.Pod)
+		slog.Debug("resolved IP",
+			slog.String("ip", ip),
+			slog.String("namespace", info.Namespace),
+			slog.String("service", info.Service),
+			slog.String("pod", info.Pod),
+		)
 	}
 
 	return info, nil
@@ -91,7 +103,10 @@ func (r *Resolver) queryK8sAPI(ctx context.Context, ip string) (*ServiceInfo, er
 	if len(ip) > 7 && ip[:7] == "::ffff:" {
 		cleanIP = ip[7:]
 		if r.config.Verbose {
-			log.Printf("Stripped IPv6-mapped prefix: %s → %s", ip, cleanIP)
+			slog.Debug("stripped IPv6-mapped prefix",
+				slog.String("ip", ip),
+				slog.String("clean_ip", cleanIP),
+			)
 		}
 	}
 
@@ -111,13 +126,16 @@ func (r *Resolver) queryK8sAPI(ctx context.Context, ip string) (*ServiceInfo, er
 
 	// Strategy 2: Try to find by service IP (ClusterIP, LoadBalancer, External IP)
 	if r.config.Verbose {
-		log.Printf("No pod found with IP %s, trying service IPs...", cleanIP)
+		slog.Debug("no pod found, trying service IPs", slog.String("ip", cleanIP))
 	}
 
 	serviceInfo, err := r.findServiceByIP(queryCtx, cleanIP)
 	if err == nil && serviceInfo != nil {
 		if r.config.Verbose {
-			log.Printf("Found service by IP: %s/%s", serviceInfo.Namespace, serviceInfo.Service)
+			slog.Debug("found service by IP",
+				slog.String("namespace", serviceInfo.Namespace),
+				slog.String("service", serviceInfo.Service),
+			)
 		}
 		return serviceInfo, nil
 	}
@@ -171,7 +189,11 @@ func (r *Resolver) findServiceByIP(ctx context.Context, ip string) (*ServiceInfo
 		// Check ClusterIP
 		if svc.Spec.ClusterIP == ip {
 			if r.config.Verbose {
-				log.Printf("Matched ClusterIP: %s/%s (%s)", svc.Namespace, svc.Name, ip)
+				slog.Debug("matched ClusterIP",
+					slog.String("namespace", svc.Namespace),
+					slog.String("service", svc.Name),
+					slog.String("ip", ip),
+				)
 			}
 			return &ServiceInfo{
 				Service:   svc.Name,
@@ -184,7 +206,11 @@ func (r *Resolver) findServiceByIP(ctx context.Context, ip string) (*ServiceInfo
 		for _, ingress := range svc.Status.LoadBalancer.Ingress {
 			if ingress.IP == ip {
 				if r.config.Verbose {
-					log.Printf("Matched LoadBalancer IP: %s/%s (%s)", svc.Namespace, svc.Name, ip)
+					slog.Debug("matched LoadBalancer IP",
+						slog.String("namespace", svc.Namespace),
+						slog.String("service", svc.Name),
+						slog.String("ip", ip),
+					)
 				}
 				return &ServiceInfo{
 					Service:   svc.Name,
@@ -198,7 +224,11 @@ func (r *Resolver) findServiceByIP(ctx context.Context, ip string) (*ServiceInfo
 		for _, externalIP := range svc.Spec.ExternalIPs {
 			if externalIP == ip {
 				if r.config.Verbose {
-					log.Printf("Matched ExternalIP: %s/%s (%s)", svc.Namespace, svc.Name, ip)
+					slog.Debug("matched ExternalIP",
+						slog.String("namespace", svc.Namespace),
+						slog.String("service", svc.Name),
+						slog.String("ip", ip),
+					)
 				}
 				return &ServiceInfo{
 					Service:   svc.Name,

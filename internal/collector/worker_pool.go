@@ -2,7 +2,8 @@ package collector
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/ppiankov/clickspectre/internal/models"
@@ -54,7 +55,10 @@ func (p *WorkerPool) Start(ctx context.Context) {
 func (p *WorkerPool) worker(id int) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Worker %d panic recovered: %v", id, r)
+			slog.Error("worker panic recovered",
+				slog.Int("worker_id", id),
+				slog.String("panic", fmt.Sprint(r)),
+			)
 		}
 		p.wg.Done()
 	}()

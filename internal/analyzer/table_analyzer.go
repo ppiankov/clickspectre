@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -14,6 +14,9 @@ func (a *Analyzer) buildTableModel(entries []*models.QueryLogEntry) error {
 		for _, tableName := range entry.Tables {
 			// Skip empty table names
 			if tableName == "" {
+				continue
+			}
+			if a.config.IsTableExcluded(tableName) {
 				continue
 			}
 
@@ -61,7 +64,7 @@ func (a *Analyzer) buildTableModel(entries []*models.QueryLogEntry) error {
 	}
 
 	if a.config.Verbose {
-		log.Printf("Built table model with %d tables", len(a.tables))
+		slog.Debug("built table model", slog.Int("tables", len(a.tables)))
 	}
 
 	return nil
@@ -121,7 +124,7 @@ func (a *Analyzer) generateSparklines(entries []*models.QueryLogEntry) error {
 	}
 
 	if a.config.Verbose {
-		log.Printf("Generated sparklines for %d tables", len(a.tables))
+		slog.Debug("generated sparklines", slog.Int("tables", len(a.tables)))
 	}
 
 	return nil

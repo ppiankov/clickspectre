@@ -2,7 +2,7 @@ package analyzer
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/ppiankov/clickspectre/internal/models"
 )
@@ -50,6 +50,9 @@ func (a *Analyzer) buildServiceModel(ctx context.Context, entries []*models.Quer
 			if tableName == "" {
 				continue
 			}
+			if a.config.IsTableExcluded(tableName) {
+				continue
+			}
 
 			// Add table if not already in list
 			found := false
@@ -66,7 +69,7 @@ func (a *Analyzer) buildServiceModel(ctx context.Context, entries []*models.Quer
 	}
 
 	if a.config.Verbose {
-		log.Printf("Built service model with %d services", len(a.services))
+		slog.Debug("built service model", slog.Int("services", len(a.services)))
 	}
 
 	return nil
