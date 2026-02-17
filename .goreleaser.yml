@@ -1,0 +1,71 @@
+version: 2
+
+project_name: clickspectre
+
+builds:
+  - id: clickspectre
+    main: ./cmd/clickspectre
+    binary: clickspectre
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}-{{ .Os }}-{{ if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+  groups:
+    - title: Features
+      regexp: "^feat(\\(.+\\))?:"
+    - title: Bug Fixes
+      regexp: "^fix(\\(.+\\))?:"
+    - title: Performance
+      regexp: "^perf(\\(.+\\))?:"
+    - title: Refactoring
+      regexp: "^refactor(\\(.+\\))?:"
+    - title: Chores
+      regexp: "^chore(\\(.+\\))?:"
+
+brews:
+  - name: clickspectre
+    repository:
+      owner: ppiankov
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/ppiankov/clickspectre
+    description: ClickHouse usage analyzer for safe table cleanup.
+    license: MIT
+    commit_author:
+      name: clickspectre-bot
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    test: |
+      system "#{bin}/clickspectre", "version"

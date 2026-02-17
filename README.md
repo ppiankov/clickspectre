@@ -107,6 +107,12 @@ clickspectre analyze \
 
 ### Installation
 
+**Homebrew (macOS/Linux):**
+
+```bash
+brew install ppiankov/tap/clickspectre
+```
+
 **From Binary (Recommended):**
 
 ```bash
@@ -129,6 +135,47 @@ sudo mv clickspectre /usr/local/bin/
 ```bash
 clickspectre version
 ```
+
+**Zero-Install (Docker):**
+
+```bash
+# Run directly from GHCR
+docker run --rm ghcr.io/ppiankov/clickspectre version
+
+# Analyze without installing locally (use `audit` alias if preferred)
+docker run --rm \
+  -v "$PWD/report:/report" \
+  ghcr.io/ppiankov/clickspectre analyze \
+  --clickhouse-dsn "clickhouse://user:password@host:9000/default" \
+  --output /report \
+  --lookback 30d
+```
+
+**GitHub Action:**
+
+```yaml
+name: ClickSpectre
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ppiankov/clickspectre-action@v1
+        with:
+          clickhouse-url: clickhouse://user:password@host:9000/default
+          format: sarif
+          fail-on: likely
+          args: --lookback 30d --detect-unused-tables
+```
+
+The action downloads the release binary, runs `clickspectre analyze`, and uploads SARIF to the Security tab when `format: sarif`.
 
 **From Source:**
 
@@ -218,8 +265,27 @@ clickspectre analyze \
   --query-timeout 10m \
   --resolve-k8s \
   --k8s-rate-limit 20 \
+  --baseline ./.clickspectre-baseline.json \
+  --update-baseline \
   --anomaly-detection \
   --verbose
+```
+
+### Baseline Mode (Suppress Known Findings)
+
+Use a baseline file to suppress findings you've already reviewed:
+
+```bash
+# First run: capture current findings in a baseline
+clickspectre analyze \
+  --clickhouse-dsn "clickhouse://host:9000/default" \
+  --baseline ./.clickspectre-baseline.json \
+  --update-baseline
+
+# Next runs: show only new findings
+clickspectre analyze \
+  --clickhouse-dsn "clickhouse://host:9000/default" \
+  --baseline ./.clickspectre-baseline.json
 ```
 
 ## CLI Commands
@@ -232,8 +298,12 @@ Analyze ClickHouse usage and generate reports.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--clickhouse-dsn` | (required) | ClickHouse connection string |
+| `--config` | auto | Config file path (default auto-load: `.clickspectre.yaml`/`.clickspectre.yml`) |
+| `--clickhouse-dsn` | (required\*) | ClickHouse connection string |
 | `--output` | `./report` | Output directory |
+| `--format` | `json` | Output format (`json`, `text`, `sarif`) |
+| `--baseline` | `""` | Baseline file path for suppressing known findings |
+| `--update-baseline` | `false` | Update baseline with current findings |
 | `--lookback` | `30d` | Lookback period (supports: 7d, 30d, 90d, 168h, etc.) |
 | `--resolve-k8s` | `false` | Enable Kubernetes IP resolution |
 | `--kubeconfig` | `~/.kube/config` | Path to kubeconfig |
@@ -248,8 +318,13 @@ Analyze ClickHouse usage and generate reports.
 | `--include-mv-deps` | `true` | Include materialized view deps |
 | `--detect-unused-tables` | `false` | Detect tables with zero usage (queries system.tables) |
 | `--min-table-size` | `1.0` | Minimum table size in MB for unused table recommendations |
+| `--min-query-count` | `0` | Minimum query count required to consider a table active |
+| `--exclude-table` | `[]` | Exclude table patterns (repeatable, supports glob) |
+| `--exclude-database` | `[]` | Exclude database patterns (repeatable, supports glob) |
 | `--verbose` | `false` | Verbose logging |
 | `--dry-run` | `false` | Don't write output |
+
+\* `--clickhouse-dsn` is not required when `clickhouse_url` or `clickhouse_dsn` is set in config file.
 
 ### `serve`
 
@@ -400,7 +475,21 @@ If you prefer manual deployment with shell scripts:
 
 ## Report Structure
 
-ClickSpectre generates a static report directory:
+ClickSpectre generates output files based on `--format`:
+
+```
+report/
+├── report.txt         # Human-readable report (--format text)
+├── report.sarif       # SARIF output (--format sarif)
+├── report.json        # Structured data (--format json)
+├── index.html         # Interactive UI (--format json)
+├── app.js             # Application logic (--format json)
+├── styles.css         # Styling (--format json)
+└── libs/
+    └── d3.v7.min.js   # D3.js library (--format json)
+```
+
+Default (`--format json`) layout:
 
 ```
 report/
@@ -433,7 +522,7 @@ ClickSpectre follows a modular architecture:
 - **Collector**: Queries ClickHouse with pagination and worker pool
 - **Analyzer**: Processes query logs to build data models
 - **Scorer**: Evaluates tables for cleanup safety
-- **Reporter**: Generates JSON reports and static UI
+- **Reporter**: Generates JSON+HTML, text, or SARIF outputs
 - **K8s Resolver**: (Optional) Resolves IPs to Kubernetes services
 
 ## Safety Mechanisms
@@ -492,28 +581,31 @@ make all
 
 ## Configuration
 
-All configuration is done via CLI flags. No config file needed.
+`clickspectre analyze` auto-loads config from `.clickspectre.yaml` (or `.clickspectre.yml`) in the current directory, then from your home directory.
 
-For repeated runs, create a shell script or alias:
+Example `.clickspectre.yaml`:
+
+```yaml
+clickhouse_url: clickhouse://readonly:password@host:9000/default
+format: text
+timeout: 10m
+min_query_count: 3
+exclude_tables:
+  - analytics.tmp_*
+exclude_databases:
+  - sandbox_*
+```
+
+CLI flags still override config file values.
+
+Example using config + overrides:
 
 ```bash
-#!/bin/bash
-# For non-readonly users (recommended)
 clickspectre analyze \
-  --clickhouse-dsn "$CLICKHOUSE_DSN" \
+  --config .clickspectre.yaml \
   --output "./reports/$(date +%Y-%m-%d)" \
-  --lookback 30d \
-  --resolve-k8s \
-  --verbose
-
-# For readonly users (use smaller limits)
-clickspectre analyze \
-  --clickhouse-dsn "$CLICKHOUSE_DSN_READONLY" \
-  --output "./reports/$(date +%Y-%m-%d)" \
-  --lookback 7d \
-  --batch-size 1000 \
-  --max-rows 50000 \
-  --verbose
+  --format sarif \
+  --query-timeout 5m
 ```
 
 ## Troubleshooting

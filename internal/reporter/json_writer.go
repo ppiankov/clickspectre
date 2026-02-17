@@ -3,7 +3,7 @@ package reporter
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -31,7 +31,7 @@ func WriteJSON(report *models.Report, cfg *config.Config) error {
 	}
 
 	if cfg.Verbose {
-		log.Printf("Report written to: %s", outputPath)
+		slog.Debug("report written", slog.String("path", outputPath))
 	}
 
 	return nil

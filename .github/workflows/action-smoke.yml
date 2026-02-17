@@ -1,0 +1,74 @@
+name: Action Smoke
+
+on:
+  pull_request:
+    paths:
+      - action.yml
+      - .github/scripts/run-action.sh
+      - .github/workflows/action-smoke.yml
+      - cmd/clickspectre/analyze.go
+      - internal/reporter/**
+  push:
+    branches: [main]
+    paths:
+      - action.yml
+      - .github/scripts/run-action.sh
+      - .github/workflows/action-smoke.yml
+      - cmd/clickspectre/analyze.go
+      - internal/reporter/**
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  smoke:
+    name: Composite Action Smoke Test
+    runs-on: ubuntu-latest
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8
+        ports:
+          - 9000:9000
+          - 8123:8123
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build local ClickSpectre binary
+        run: go build -o ./bin/clickspectre ./cmd/clickspectre
+
+      - name: Wait for ClickHouse
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if curl -fsS "http://127.0.0.1:8123/ping" | grep -q "Ok"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ClickHouse service failed to start" >&2
+          exit 1
+
+      - name: Run ClickSpectre action
+        id: clickspectre
+        uses: ./
+        with:
+          binary-path: ./bin/clickspectre
+          clickhouse-url: clickhouse://default:@127.0.0.1:9000/default
+          format: sarif
+          fail-on: none
+          args: --lookback 1d --batch-size 1000 --max-rows 1000
+          upload-sarif: "false"
+
+      - name: Validate action outputs
+        shell: bash
+        run: |
+          test -n "${{ steps.clickspectre.outputs.report-sarif }}"
+          test -f "${{ steps.clickspectre.outputs.report-sarif }}"
