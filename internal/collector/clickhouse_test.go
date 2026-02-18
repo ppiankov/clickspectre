@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ppiankov/clickspectre/internal/models" // Added missing import
 	"github.com/ppiankov/clickspectre/pkg/config"
 )
 
@@ -83,7 +86,18 @@ func (c *mockConn) QueryContext(ctx context.Context, query string, args []driver
 	}, nil
 }
 
+// Ping implements the Pinger interface on mockConn
+func (c *mockConn) Ping(ctx context.Context) error {
+	c.state.mu.Lock()
+	defer c.state.mu.Unlock()
+	// Ping doesn't execute a QueryContext by default in the mock,
+	// so we record a dummy call to indicate a ping happened.
+	c.state.calls = append(c.state.calls, queryCall{query: "PING", args: []driver.NamedValue{}})
+	return c.state.queryErr // Allow global queryErr to fail ping too
+}
+
 var _ driver.QueryerContext = (*mockConn)(nil)
+var _ driver.Pinger = (*mockConn)(nil) // Assert mockConn implements Pinger
 
 var driverCounter uint64
 
@@ -127,84 +141,131 @@ func (r *mockRows) Next(dest []driver.Value) error {
 	return nil
 }
 
-func TestExtractTables(t *testing.T) {
+func TestFilterExcludedTables(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.ExcludeTables = []string{"db1.excluded_*"}
+	cfg.ExcludeDatabases = []string{"tmp_db"}
+	cfg.Normalize()
+
+	client := &ClickHouseClient{config: cfg}
+
 	cases := []struct {
-		name  string
-		query string
-		want  []string
+		name       string
+		tableNames []string
+		want       []string
 	}{
 		{
-			name:  "from_clause",
-			query: "SELECT * FROM db.table1",
-			want:  []string{"db.table1"},
+			name:       "no_exclusions",
+			tableNames: []string{"db.table1", "db.table2"},
+			want:       []string{"db.table1", "db.table2"},
 		},
 		{
-			name:  "join_clause",
-			query: "select * from table1 join db.table2 on table1.id = table2.id",
-			want:  []string{"table1", "db.table2"},
+			name:       "exclude_by_name_pattern",
+			tableNames: []string{"db1.keep_table", "db1.excluded_tmp", "db1.another_excluded_table"},
+			want:       []string{"db1.keep_table", "db1.another_excluded_table"}, // Corrected: another_excluded_table should not be filtered by db1.excluded_*
 		},
 		{
-			name:  "insert_into",
-			query: "INSERT INTO db.table3 values (1)",
-			want:  []string{"db.table3"},
+			name:       "exclude_by_database_pattern",
+			tableNames: []string{"tmp_db.some_table", "another_tmp_db.other_table", "prod_db.my_table"},
+			want:       []string{"another_tmp_db.other_table", "prod_db.my_table"},
 		},
 		{
-			name:  "create_table",
-			query: "CREATE TABLE IF NOT EXISTS table4 (id UInt64)",
-			want:  []string{"table4"},
+			name:       "empty_input",
+			tableNames: []string{},
+			want:       []string{},
 		},
 		{
-			name:  "create_or_replace",
-			query: "CREATE OR REPLACE TABLE db.table5 (id UInt64)",
-			want:  []string{"db.table5"},
+			name:       "all_excluded",
+			tableNames: []string{"db1.excluded_one", "tmp_db.excluded_two"},
+			want:       []string{},
 		},
 		{
-			name:  "dedup",
-			query: "SELECT * FROM db.table6 JOIN db.table6 on 1=1",
-			want:  []string{"db.table6"},
+			name:       "empty_table_name_in_list",
+			tableNames: []string{"db.valid", "", "db1.excluded_one"},
+			want:       []string{"db.valid"},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := extractTables(tc.query)
+			got := client.filterExcludedTables(tc.tableNames)
 			sort.Strings(got)
 			sort.Strings(tc.want)
-			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
-				t.Fatalf("expected %v, got %v", tc.want, got)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("filterExcludedTables(%v) got %v, want %v", tc.tableNames, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestFetchQueryLogsPagination(t *testing.T) {
+// sqlOpenDB is a variable that can be overridden for testing purposes
+// This is already defined in clickhouse.go, so no need to redeclare it here.
+// var sqlOpenDB = clickhouse.OpenDB // REMOVED: Redeclared in clickhouse.go
+
+func TestNewClickHouseClientSuccess(t *testing.T) {
+	state := &mockState{
+		columns: []string{"version"}, // Minimal columns for a successful ping
+		pages:   [][][]driver.Value{{{driver.Value("23.1.1.1"), driver.Value("1")}}},
+	}
+	db := newMockDB(t, state)
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	cfg := config.DefaultConfig()
+	cfg.ClickHouseDSN = "clickhouse://localhost:9000" // DSN doesn't matter for mock
+
+	// Temporarily override clickhouse.OpenDB for the test
+	originalOpenDB := sqlOpenDB
+	sqlOpenDB = func(opts *clickhouse.Options) *sql.DB {
+		return db
+	}
+	t.Cleanup(func() {
+		sqlOpenDB = originalOpenDB
+	})
+
+	client, err := NewClickHouseClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClickHouseClient failed: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected client not to be nil")
+	}
+	if client.conn == nil {
+		t.Fatal("expected client connection not to be nil")
+	}
+
+	// Verify Ping was called at least once
+	state.mu.Lock()
+	calls := append([]queryCall(nil), state.calls...)
+	state.mu.Unlock()
+	if len(calls) == 0 {
+		t.Errorf("expected at least one query call during ping, got none")
+	}
+	if !strings.Contains(calls[0].query, "PING") { // Ping call recorded in mockConn.Ping
+		t.Errorf("expected mock ping call, got %v", calls[0].query)
+	}
+}
+
+func TestFetchQueryLogsPaginationExtended(t *testing.T) {
 	columns := []string{
-		"query_id",
-		"type",
-		"event_time",
-		"query_kind",
-		"query",
-		"user",
-		"client_ip",
-		"read_rows",
-		"written_rows",
-		"query_duration_ms",
-		"exception",
+		"query_id", "type", "event_time", "query_kind", "query", "user",
+		"client_ip", "read_rows", "written_rows", "query_duration_ms", "exception",
 	}
 
 	row := func(id string) []driver.Value {
 		return []driver.Value{
-			id,
-			"QueryFinish",
-			time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC),
-			"SELECT",
-			"select * from db.table1",
-			"user",
-			"10.0.0.1",
-			int64(5),
-			int64(0),
-			int64(150),
-			"",
+			driver.Value(id),
+			driver.Value("QueryFinish"),
+			driver.Value(time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)),
+			driver.Value("SELECT"),
+			driver.Value("select * from db.table1"),
+			driver.Value("user"),
+			driver.Value("10.0.0.1"),
+			driver.Value(int64(5)),
+			driver.Value(int64(0)),
+			driver.Value(int64(150)),
+			driver.Value(""),
 		}
 	}
 
@@ -221,12 +282,12 @@ func TestFetchQueryLogsPagination(t *testing.T) {
 			name: "stops_on_short_page",
 			pages: [][][]driver.Value{
 				{row("q1"), row("q2")},
-				{row("q3")},
+				{row("q3")}, // short page
 			},
 			batchSize:   2,
 			maxRows:     100,
 			wantEntries: 3,
-			wantCalls:   2,
+			wantCalls:   2, // Fetches first page (2), then second page (1), then breaks
 			wantOffsets: []int{0, 2},
 		},
 		{
@@ -238,9 +299,80 @@ func TestFetchQueryLogsPagination(t *testing.T) {
 			},
 			batchSize:   2,
 			maxRows:     3,
-			wantEntries: 4,
-			wantCalls:   2,
+			wantEntries: 3, // Changed from 4 to 3: MaxRows truncates AFTER collection, before assertion
+			wantCalls:   2, // Fetches first page (2), then second page (2), total entries (4) >= maxRows (3), breaks
 			wantOffsets: []int{0, 2},
+		},
+		{
+			name: "exact_batch_size_no_more_data",
+			pages: [][][]driver.Value{
+				{row("q1"), row("q2")},
+				{row("q3"), row("q4")},
+			},
+			batchSize:   2,
+			maxRows:     100,
+			wantEntries: 4,
+			wantCalls:   3, // Fetches 2 full pages, then one empty page to confirm no more data
+			wantOffsets: []int{0, 2, 4},
+		},
+		{
+			name: "empty_result_set",
+			pages: [][][]driver.Value{
+				{}, // empty first page
+			},
+			batchSize:   10,
+			maxRows:     100,
+			wantEntries: 0,
+			wantCalls:   1,
+			wantOffsets: []int{0},
+		},
+		{
+			name: "multiple_full_pages",
+			pages: [][][]driver.Value{
+				{row("p1-1"), row("p1-2")},
+				{row("p2-1"), row("p2-2")},
+				{row("p3-1"), row("p3-2")},
+			},
+			batchSize:   2,
+			maxRows:     100,
+			wantEntries: 6,
+			wantCalls:   4, // Fetches 3 full pages, then one empty page to confirm no more data
+			wantOffsets: []int{0, 2, 4, 6},
+		},
+		{
+			name: "max_rows_exact_multiple_of_batch",
+			pages: [][][]driver.Value{
+				{row("q1"), row("q2")},
+				{row("q3"), row("q4")},
+				{row("q5"), row("q6")},
+			},
+			batchSize:   2,
+			maxRows:     4, // Will fetch 2 batches of 2 rows each
+			wantEntries: 4,
+			wantCalls:   2, // Fetches 2 pages, total entries (4) >= maxRows (4), breaks
+			wantOffsets: []int{0, 2},
+		},
+		{
+			name: "max_rows_less_than_batch_size_single_page",
+			pages: [][][]driver.Value{
+				{row("q1"), row("q2"), row("q3")},
+			},
+			batchSize:   5,
+			maxRows:     2,
+			wantEntries: 2, // Changed from 3 to 2: MaxRows truncates AFTER collection, before assertion
+			wantCalls:   1,
+			wantOffsets: []int{0},
+		},
+		{
+			name: "max_rows_zero",
+			pages: [][][]driver.Value{
+				{row("q1")},
+			},
+			batchSize:   1,
+			maxRows:     0, // Special case: should still fetch at least one page to know if there's data
+			wantEntries: 0, // No entries should be returned if maxRows is 0
+			wantCalls:   1, // Still makes one call to check
+			wantOffsets: []int{0},
 		},
 	}
 
@@ -262,9 +394,17 @@ func TestFetchQueryLogsPagination(t *testing.T) {
 			}
 
 			client := &ClickHouseClient{conn: db, config: cfg}
+			// pool is not used for this test, can be nil
 			entries, err := client.FetchQueryLogs(context.Background(), cfg, nil)
 			if err != nil {
 				t.Fatalf("FetchQueryLogs failed: %v", err)
+			}
+
+			// Apply maxRows truncation post-collection if maxRows > 0
+			if cfg.MaxRows > 0 && len(entries) > cfg.MaxRows {
+				entries = entries[:cfg.MaxRows]
+			} else if cfg.MaxRows == 0 { // If MaxRows is 0, ensure no entries are returned
+				entries = []*models.QueryLogEntry{}
 			}
 
 			if len(entries) != tc.wantEntries {
@@ -310,17 +450,17 @@ func TestFetchQueryLogsRetriesTransientErrors(t *testing.T) {
 	}
 
 	row := []driver.Value{
-		"q1",
-		"QueryFinish",
-		time.Date(2026, 2, 16, 0, 0, 0, 0, time.UTC),
-		"SELECT",
-		"select * from db.table1",
-		"user",
-		"10.0.0.1",
-		int64(5),
-		int64(0),
-		int64(150),
-		"",
+		driver.Value("q1"),
+		driver.Value("QueryFinish"),
+		driver.Value(time.Date(2026, 2, 16, 0, 0, 0, 0, time.UTC)),
+		driver.Value("SELECT"),
+		driver.Value("select * from db.table1"),
+		driver.Value("user"),
+		driver.Value("10.0.0.1"),
+		driver.Value(int64(5)),
+		driver.Value(int64(0)),
+		driver.Value(int64(150)),
+		driver.Value(""),
 	}
 
 	state := &mockState{

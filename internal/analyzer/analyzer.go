@@ -19,7 +19,7 @@ type CollectorInterface interface {
 // Analyzer processes query log entries and builds analysis models
 type Analyzer struct {
 	config    *config.Config
-	resolver  *k8s.Resolver
+	resolver  k8s.K8sResolverInterface // Use interface here
 	collector CollectorInterface
 	tables    map[string]*models.Table
 	services  map[string]*models.Service
@@ -28,7 +28,7 @@ type Analyzer struct {
 }
 
 // New creates a new analyzer instance
-func New(cfg *config.Config, resolver *k8s.Resolver, collector CollectorInterface) *Analyzer {
+func New(cfg *config.Config, resolver k8s.K8sResolverInterface, collector CollectorInterface) *Analyzer {
 	return &Analyzer{
 		config:    cfg,
 		resolver:  resolver,

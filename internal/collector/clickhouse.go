@@ -20,6 +20,9 @@ type ClickHouseClient struct {
 	config *config.Config
 }
 
+// sqlOpenDB is a variable that can be overridden for testing purposes
+var sqlOpenDB = clickhouse.OpenDB
+
 // NewClickHouseClient creates a new ClickHouse client
 func NewClickHouseClient(cfg *config.Config) (*ClickHouseClient, error) {
 	// Parse DSN options
@@ -41,8 +44,8 @@ func NewClickHouseClient(cfg *config.Config) (*ClickHouseClient, error) {
 	// The driver may try to set max_execution_time which fails in readonly mode
 	opts.Settings = nil
 
-	// Create connection
-	conn := clickhouse.OpenDB(opts)
+	// Create connection using the overridable sqlOpenDB
+	conn := sqlOpenDB(opts)
 	if err := conn.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping ClickHouse: %w", err)
 	}

@@ -23,10 +23,10 @@ func TestSimpleScorerScore(t *testing.T) {
 				FullName:   "db.table1",
 				Reads:      2000,
 				Writes:     5,
-				LastAccess: now.Add(-48 * time.Hour),
+				LastAccess: now.Add(-48 * time.Hour), // 2 days ago
 			},
 			services: servicesUsingTable("db.table1", 6),
-			want:     1.0,
+			want:     1.0, // 0.4 (recent) + 0.3 (high queries) + 0.2 (many services) + 0.1 (writes)
 		},
 		{
 			name: "moderate_usage_low_diversity_no_writes",
@@ -34,10 +34,10 @@ func TestSimpleScorerScore(t *testing.T) {
 				FullName:   "db.table2",
 				Reads:      50,
 				Writes:     0,
-				LastAccess: now.Add(-20 * 24 * time.Hour),
+				LastAccess: now.Add(-20 * 24 * time.Hour), // 20 days ago
 			},
 			services: servicesUsingTable("db.table2", 2),
-			want:     0.45,
+			want:     0.45, // 0.3 (30 days ago) + 0.1 (10-100 queries) + 0.05 (2 services)
 		},
 		{
 			name: "old_low_usage_no_services",
@@ -45,11 +45,12 @@ func TestSimpleScorerScore(t *testing.T) {
 				FullName:   "db.table3",
 				Reads:      0,
 				Writes:     0,
-				LastAccess: now.Add(-120 * 24 * time.Hour),
+				LastAccess: now.Add(-120 * 24 * time.Hour), // 120 days ago
 			},
 			services: map[string]*models.Service{},
 			want:     0.0,
 		},
+		// --- Zero Usage Tables ---
 		{
 			name: "zero_usage_mv_replicated_small",
 			table: &models.Table{
@@ -57,10 +58,10 @@ func TestSimpleScorerScore(t *testing.T) {
 				ZeroUsage:    true,
 				IsMV:         true,
 				IsReplicated: true,
-				TotalBytes:   500000,
+				TotalBytes:   500000, // < 1MB
 			},
 			services: map[string]*models.Service{},
-			want:     1.0,
+			want:     1.0, // 0.5 (MV) + 0.3 (Replicated) + 0.2 (small)
 		},
 		{
 			name: "zero_usage_replicated_large",
@@ -68,10 +69,205 @@ func TestSimpleScorerScore(t *testing.T) {
 				FullName:     "db.table5",
 				ZeroUsage:    true,
 				IsReplicated: true,
-				TotalBytes:   2 * 1e9,
+				TotalBytes:   2 * 1e9, // > 1GB
 			},
 			services: map[string]*models.Service{},
-			want:     0.20,
+			want:     0.20, // 0.3 (Replicated) - 0.1 (large)
+		},
+		{
+			name: "zero_usage_mv_only",
+			table: &models.Table{
+				FullName:  "db.table6",
+				ZeroUsage: true,
+				IsMV:      true,
+			},
+			services: map[string]*models.Service{},
+			want:     0.7, // 0.5 (MV) + 0.2 (TotalBytes=0 which is < 1MB)
+		},
+		{
+			name: "zero_usage_mv_dependency_only",
+			table: &models.Table{
+				FullName:     "db.table7",
+				ZeroUsage:    true,
+				MVDependency: []string{"db.other_mv"},
+			},
+			services: map[string]*models.Service{},
+			want:     0.7, // 0.5 (MV Dependency) + 0.2 (TotalBytes=0 which is < 1MB)
+		},
+		{
+			name: "zero_usage_small_only",
+			table: &models.Table{
+				FullName:   "db.table8",
+				ZeroUsage:  true,
+				TotalBytes: 100000, // < 1MB
+			},
+			services: map[string]*models.Service{},
+			want:     0.2, // 0.2 (small)
+		},
+		{
+			name: "zero_usage_large_only",
+			table: &models.Table{
+				FullName:   "db.table9",
+				ZeroUsage:  true,
+				TotalBytes: 5 * 1e9, // > 1GB
+			},
+			services: map[string]*models.Service{},
+			want:     -0.1, // -0.1 (large)
+		},
+		{
+			name: "zero_usage_empty",
+			table: &models.Table{
+				FullName:  "db.table10",
+				ZeroUsage: true,
+			},
+			services: map[string]*models.Service{},
+			want:     0.2, // 0.2 (TotalBytes=0 which is < 1MB)
+		},
+		// --- Tables with Usage ---
+		{
+			name: "recent_low_volume_some_services_no_writes",
+			table: &models.Table{
+				FullName:   "db.table11",
+				Reads:      5,
+				Writes:     0,
+				LastAccess: now.Add(-1 * 24 * time.Hour), // 1 day ago
+			},
+			services: servicesUsingTable("db.table11", 1),
+			want:     0.45, // 0.4 (recent) + 0.05 (1 service)
+		},
+		{
+			name: "medium_old_medium_volume_no_services_with_writes",
+			table: &models.Table{
+				FullName:   "db.table12",
+				Reads:      70,
+				Writes:     2,
+				LastAccess: now.Add(-60 * 24 * time.Hour), // 60 days ago
+			},
+			services: map[string]*models.Service{},
+			want:     0.3, // 0.1 (60 days ago) + 0.1 (10-100 queries) + 0.1 (writes)
+		},
+		{
+			name: "very_old_high_volume_many_services_with_writes",
+			table: &models.Table{
+				FullName:   "db.table13",
+				Reads:      1500,
+				Writes:     10,
+				LastAccess: now.Add(-100 * 24 * time.Hour), // 100 days ago
+			},
+			services: servicesUsingTable("db.table13", 10),
+			want:     0.6, // 0.3 (high queries) + 0.2 (many services) + 0.1 (writes)
+		},
+		{
+			name: "no_activity_no_services",
+			table: &models.Table{
+				FullName:   "db.table14",
+				Reads:      0,
+				Writes:     0,
+				LastAccess: now.Add(-365 * 24 * time.Hour), // 1 year ago
+			},
+			services: map[string]*models.Service{},
+			want:     0.0,
+		},
+		{
+			name: "just_above_10_queries_threshold",
+			table: &models.Table{
+				FullName:   "db.table15",
+				Reads:      11,
+				Writes:     0,
+				LastAccess: now.Add(-5 * 24 * time.Hour),
+			},
+			services: map[string]*models.Service{},
+			want:     0.5, // 0.4 (recent) + 0.1 (10-100 queries)
+		},
+		{
+			name: "just_above_100_queries_threshold",
+			table: &models.Table{
+				FullName:   "db.table16",
+				Reads:      101,
+				Writes:     0,
+				LastAccess: now.Add(-5 * 24 * time.Hour),
+			},
+			services: map[string]*models.Service{},
+			want:     0.6, // 0.4 (recent) + 0.2 (100-1000 queries) = 0.6
+		},
+		{
+			name: "just_above_1000_queries_threshold",
+			table: &models.Table{
+				FullName:   "db.table17",
+				Reads:      1001,
+				Writes:     0,
+				LastAccess: now.Add(-5 * 24 * time.Hour),
+			},
+			services: map[string]*models.Service{},
+			want:     0.7, // 0.4 (recent) + 0.3 ( > 1000 queries) = 0.7
+		},
+		{
+			name: "just_above_0_unique_services",
+			table: &models.Table{
+				FullName:   "db.table18",
+				Reads:      1,
+				Writes:     0,
+				LastAccess: now.Add(-5 * 24 * time.Hour),
+			},
+			services: servicesUsingTable("db.table18", 1),
+			want:     0.45, // 0.4 (recent) + 0.05 (1 service)
+		},
+		{
+			name: "just_above_2_unique_services",
+			table: &models.Table{
+				FullName:   "db.table19",
+				Reads:      1,
+				Writes:     0,
+				LastAccess: now.Add(-5 * 24 * time.Hour),
+			},
+			services: servicesUsingTable("db.table19", 3),
+			want:     0.55, // 0.4 (recent) + 0.15 (3 services)
+		},
+		{
+			name: "just_above_5_unique_services",
+			table: &models.Table{
+				FullName:   "db.table20",
+				Reads:      1,
+				Writes:     0,
+				LastAccess: now.Add(-5 * 24 * time.Hour),
+			},
+			services: servicesUsingTable("db.table20", 6),
+			want:     0.6, // 0.4 (recent) + 0.2 (6 services)
+		},
+		{
+			name: "no_writes_no_reads_recent_access",
+			table: &models.Table{
+				FullName:   "db.table21",
+				Reads:      0,
+				Writes:     0,
+				LastAccess: now.Add(-1 * 24 * time.Hour), // 1 day ago
+			},
+			services: servicesUsingTable("db.table21", 1),
+			want:     0.45, // 0.4 (recent) + 0.05 (1 service)
+		},
+		{
+			name: "mv_dependency_zero_usage_large_not_replicated",
+			table: &models.Table{
+				FullName:     "db.table22",
+				ZeroUsage:    true,
+				MVDependency: []string{"mv.table"},
+				TotalBytes:   5 * 1e9, // > 1GB
+				IsReplicated: false,
+			},
+			services: map[string]*models.Service{},
+			want:     0.4, // 0.5 (MV Dependency) - 0.1 (large)
+		},
+		{
+			name: "mv_dependency_zero_usage_small_replicated",
+			table: &models.Table{
+				FullName:     "db.table23",
+				ZeroUsage:    true,
+				MVDependency: []string{"mv.table"},
+				TotalBytes:   100, // < 1MB
+				IsReplicated: true,
+			},
+			services: map[string]*models.Service{},
+			want:     1.0, // 0.5 (MV Dependency) + 0.3 (replicated) + 0.2 (small)
 		},
 	}
 

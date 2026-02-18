@@ -30,17 +30,17 @@ func testQueryLogColumns() []string {
 
 func testQueryRow(id, query string, durationMs int64) []driver.Value {
 	return []driver.Value{
-		id,
-		"QueryFinish",
-		time.Date(2026, 2, 16, 0, 0, 0, 0, time.UTC),
-		"SELECT",
-		query,
-		"user",
-		"10.0.0.1",
-		int64(10),
-		int64(0),
-		durationMs,
-		"",
+		driver.Value(id),
+		driver.Value("QueryFinish"),
+		driver.Value(time.Date(2026, 2, 16, 0, 0, 0, 0, time.UTC)),
+		driver.Value("SELECT"),
+		driver.Value(query),
+		driver.Value("user"),
+		driver.Value("10.0.0.1"),
+		driver.Value(int64(10)),
+		driver.Value(int64(0)),
+		driver.Value(durationMs),
+		driver.Value(""),
 	}
 }
 
@@ -54,17 +54,17 @@ func TestProcessBatchHandlesInvalidRowsAndTruncation(t *testing.T) {
 				testQueryRow("good", "SELECT * FROM db.events", 150),
 				// Wrong type for query_duration_ms to trigger scan error.
 				{
-					"bad-scan",
-					"QueryFinish",
-					time.Now(),
-					"SELECT",
-					"SELECT 1",
-					"user",
-					"10.0.0.1",
-					int64(1),
-					int64(0),
-					"not-an-int",
-					"",
+					driver.Value("bad-scan"),
+					driver.Value("QueryFinish"),
+					driver.Value(time.Now()),
+					driver.Value("SELECT"),
+					driver.Value("SELECT 1"),
+					driver.Value("user"),
+					driver.Value("10.0.0.1"),
+					driver.Value(int64(1)),
+					driver.Value(int64(0)),
+					driver.Value("not-an-int"),
+					driver.Value(""),
 				},
 				// Empty query_id to trigger essential-field validation skip.
 				testQueryRow("", "SELECT * FROM db.events", 10),
@@ -208,8 +208,8 @@ func TestCheckSchema(t *testing.T) {
 		columns: columns,
 		pages: [][][]driver.Value{
 			{
-				{"query_id", "String", "", "", "", "", ""},
-				{"event_time", "DateTime", "", "", "", "", ""},
+				{driver.Value("query_id"), driver.Value("String"), driver.Value(""), driver.Value(""), driver.Value(""), driver.Value(""), driver.Value("")},
+				{driver.Value("event_time"), driver.Value("DateTime"), driver.Value(""), driver.Value(""), driver.Value(""), driver.Value(""), driver.Value("")},
 			},
 		},
 	}
@@ -258,8 +258,8 @@ func TestFetchTableMetadata(t *testing.T) {
 		columns: columns,
 		pages: [][][]driver.Value{
 			{
-				{"db1", "mv_table", "ReplicatedMergeTree", int64(1024), int64(10), createTime, "dbx,dby", "tx,ty"},
-				{"db2", "plain", "MergeTree", nil, nil, createTime, nil, nil},
+				{driver.Value("db1"), driver.Value("mv_table"), driver.Value("ReplicatedMergeTree"), driver.Value(int64(1024)), driver.Value(int64(10)), driver.Value(createTime), driver.Value("dbx,dby"), driver.Value("tx,ty")},
+				{driver.Value("db2"), driver.Value("plain"), driver.Value("MergeTree"), nil, nil, driver.Value(createTime), nil, nil},
 			},
 		},
 	}
@@ -338,9 +338,9 @@ func TestFetchTableMetadataAppliesExclusions(t *testing.T) {
 		columns: columns,
 		pages: [][][]driver.Value{
 			{
-				{"db1", "keep", "MergeTree", int64(1), int64(1), createTime, nil, nil},
-				{"db1", "tmp_stage", "MergeTree", int64(1), int64(1), createTime, nil, nil},
-				{"tmpdb", "sessions", "MergeTree", int64(1), int64(1), createTime, nil, nil},
+				{driver.Value("db1"), driver.Value("keep"), driver.Value("MergeTree"), driver.Value(int64(1)), driver.Value(int64(1)), driver.Value(createTime), nil, nil},
+				{driver.Value("db1"), driver.Value("tmp_stage"), driver.Value("MergeTree"), driver.Value(int64(1)), driver.Value(int64(1)), driver.Value(createTime), nil, nil},
+				{driver.Value("tmpdb"), driver.Value("sessions"), driver.Value("MergeTree"), driver.Value(int64(1)), driver.Value(int64(1)), driver.Value(createTime), nil, nil},
 			},
 		},
 	}
@@ -436,7 +436,9 @@ func TestCollectorCollectAndWrapperMethods(t *testing.T) {
 	metadataState := &mockState{
 		columns: []string{"database", "name", "engine", "total_bytes", "total_rows", "create_time", "dep_databases", "dep_tables"},
 		pages: [][][]driver.Value{
-			{{"db", "tbl", "MergeTree", int64(1), int64(1), time.Now(), "", ""}},
+			{
+				{driver.Value("db"), driver.Value("tbl"), driver.Value("MergeTree"), driver.Value(int64(1)), driver.Value(int64(1)), driver.Value(time.Now()), driver.Value(""), driver.Value("")},
+			},
 		},
 	}
 	metadataDB := newMockDB(t, metadataState)

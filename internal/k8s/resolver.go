@@ -11,6 +11,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// K8sResolverInterface defines the interface for Kubernetes IP resolution
+type K8sResolverInterface interface {
+	ResolveIP(ctx context.Context, ip string) (*ServiceInfo, error)
+	Close() error
+}
+
+// ErrNotFound is returned when no K8s service or pod is found for an IP
+var ErrNotFound = fmt.Errorf("no pod or service found for IP")
+
 // Resolver resolves IP addresses to Kubernetes services
 type Resolver struct {
 	client      *Client
@@ -18,6 +27,7 @@ type Resolver struct {
 	rateLimiter *RateLimiter
 	config      *config.Config
 }
+
 
 // NewResolver creates a new IP→Service resolver
 func NewResolver(cfg *config.Config) (*Resolver, error) {
