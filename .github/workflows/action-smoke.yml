@@ -65,7 +65,7 @@ jobs:
           format: sarif
           fail-on: none
           args: --lookback 1d --batch-size 1000 --max-rows 1000
-          upload-sarif: "false"
+          upload-sarif: "true"
 
       - name: Validate action outputs
         shell: bash
