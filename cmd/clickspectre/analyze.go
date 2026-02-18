@@ -43,7 +43,7 @@ generate cleanup recommendations, and create an interactive visual report.`,
 				return err
 			}
 
-			if loadedConfigPath != "" && verbose {
+			if loadedConfigPath != "" {
 				slog.Debug("loaded config file", slog.String("path", loadedConfigPath))
 			}
 
@@ -85,9 +85,8 @@ generate cleanup recommendations, and create an interactive visual report.`,
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg.Verbose = verbose
-			return runAnalyze(cfg)
-		},
-	}
+			return runAnalyze(cfg, isFirstRun)
+		}}
 
 	// ClickHouse flags
 	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file (default: auto-load .clickspectre.yaml)")
@@ -192,8 +191,11 @@ func applyAnalyzeConfigFileDefaults(
 }
 
 // runAnalyze executes the analysis workflow
-func runAnalyze(cfg *config.Config) error {
+func runAnalyze(cfg *config.Config, isFirstRun bool) error {
 	logging.Init(cfg.Verbose)
+	if isFirstRun {
+		slog.Debug("first-time analysis", slog.String("clickhouse_host", extractHost(cfg.ClickHouseDSN)))
+	}
 
 	startTime := time.Now()
 	ctx := context.Background()
@@ -209,7 +211,7 @@ func runAnalyze(cfg *config.Config) error {
 	logConnectionSettings(cfg)
 
 	// 1. Initialize collector
-	slog.Info("connecting to ClickHouse", slog.String("dsn", maskDSN(cfg.ClickHouseDSN)))
+	slog.Debug("connecting to ClickHouse", slog.String("dsn", maskDSN(cfg.ClickHouseDSN)))
 	col, err := collector.New(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create collector: %w", err)
@@ -219,7 +221,7 @@ func runAnalyze(cfg *config.Config) error {
 	// 2. Initialize K8s resolver (if enabled)
 	var resolver *k8s.Resolver
 	if cfg.ResolveK8s {
-		slog.Info("connecting to Kubernetes", slog.String("kubeconfig", cfg.KubeConfig))
+		slog.Debug("connecting to Kubernetes", slog.String("kubeconfig", cfg.KubeConfig))
 		resolver, err = k8s.NewResolver(cfg)
 		if err != nil {
 			slog.Error("failed to initialize Kubernetes resolver",
@@ -231,7 +233,7 @@ func runAnalyze(cfg *config.Config) error {
 	}
 
 	// 3. Collect query logs
-	slog.Info("collecting query logs",
+	slog.Debug("collecting query logs",
 		slog.Duration("lookback", cfg.LookbackPeriod),
 		slog.Int("batch_size", cfg.BatchSize),
 	)
@@ -239,24 +241,24 @@ func runAnalyze(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to collect query logs: %w", err)
 	}
-	slog.Info("collected query log entries", slog.Int("count", len(entries)))
+	slog.Debug("collected query log entries", slog.Int("count", len(entries)))
 
 	// 4. Analyze data
-	slog.Info("analyzing data", slog.Int("entries", len(entries)))
+	slog.Debug("analyzing data", slog.Int("entries", len(entries)))
 	an := analyzer.New(cfg, resolver, col)
 	if err := an.Analyze(ctx, entries); err != nil {
 		return fmt.Errorf("failed to analyze data: %w", err)
 	}
-	slog.Info("analysis complete",
+	slog.Debug("analysis complete",
 		slog.Int("tables", len(an.Tables())),
 		slog.Int("services", len(an.Services())),
 		slog.Int("edges", len(an.Edges())),
 	)
 
 	// 5. Score tables and generate recommendations
-	slog.Info("scoring tables", slog.Int("tables", len(an.Tables())))
+	slog.Debug("scoring tables", slog.Int("tables", len(an.Tables())))
 	recommendations := scorer.GenerateRecommendations(an.Tables(), an.Services(), cfg)
-	slog.Info("recommendations generated",
+	slog.Debug("recommendations generated",
 		slog.Int("safe_to_drop", len(recommendations.SafeToDrop)),
 		slog.Int("likely_safe", len(recommendations.LikelySafe)),
 		slog.Int("keep", len(recommendations.Keep)),
@@ -272,19 +274,23 @@ func runAnalyze(cfg *config.Config) error {
 
 	// 8. Write output
 	if !cfg.DryRun {
-		slog.Info("writing report", slog.String("output_dir", cfg.OutputDir))
+		slog.Debug("writing report", slog.String("output_dir", cfg.OutputDir))
 		rep := reporter.New(cfg)
 		if err := rep.Generate(report); err != nil {
 			return fmt.Errorf("failed to generate report: %w", err)
 		}
-		slog.Info("report written", slog.String("output_dir", cfg.OutputDir))
+		slog.Debug("report written", slog.String("output_dir", cfg.OutputDir))
 	} else {
-		slog.Info("dry run enabled", slog.String("output_dir", cfg.OutputDir))
+		slog.Debug("dry run enabled", slog.String("output_dir", cfg.OutputDir))
 	}
 
 	// 9. Success
 	duration := time.Since(startTime)
 	logAnalysisSummary(cfg, report, duration)
+
+	if isFirstRun {
+		slog.Debug("first run complete", slog.String("tip", "review the report in your browser; exit codes: 0=clean, 1=findings"))
+	}
 
 	return nil
 }
@@ -432,7 +438,7 @@ func logAnalysisSummary(cfg *config.Config, report *models.Report, duration time
 		attrs = append(attrs, slog.String("output_dir", cfg.OutputDir))
 	}
 
-	slog.Info(message, attrs...)
+	slog.Debug(message, attrs...)
 }
 
 func countDatabases(tables []models.Table) int {
@@ -461,45 +467,49 @@ func countFindings(report *models.Report) int {
 }
 
 func applyBaseline(cfg *config.Config, report *models.Report) error {
-	if !cfg.UpdateBaseline && cfg.BaselinePath == "" {
-		return nil
-	}
-
+	// Determine baseline file path
 	baselinePath := cfg.BaselinePath
 	if baselinePath == "" {
 		baselinePath = baseline.DefaultPath
 	}
 
-	known, err := baseline.Load(baselinePath)
+	// Load existing baseline findings
+	existingBaselineFindings, err := baseline.Load(baselinePath)
 	if err != nil {
-		return fmt.Errorf("failed to load baseline: %w", err)
+		return fmt.Errorf("failed to load baseline from %s: %w", baselinePath, err)
 	}
 
-	suppressed, remaining := baseline.SuppressKnown(report, known)
-	if suppressed > 0 {
-		slog.Info("suppressed known findings",
-			slog.Int("suppressed", suppressed),
-			slog.Int("remaining", remaining),
-			slog.String("baseline", baselinePath),
+	// Generate current findings from the report
+	currentFindings, err := baseline.GenerateFindings(report)
+	if err != nil {
+		return fmt.Errorf("failed to generate findings for baseline: %w", err)
+	}
+
+	// If --baseline flag is used (but not --update-baseline), apply suppression
+	if cfg.BaselinePath != "" && !cfg.UpdateBaseline {
+		suppressedCount, err := baseline.ApplySuppression(report, existingBaselineFindings)
+		if err != nil {
+			return fmt.Errorf("failed to apply baseline suppression: %w", err)
+		}
+		if suppressedCount > 0 {
+			slog.Debug("suppressed known findings",
+				slog.Int("suppressed", suppressedCount),
+				slog.String("baseline_file", baselinePath),
+			)
+		}
+	}
+
+	// If --update-baseline flag is used, merge current findings into the baseline and save
+	if cfg.UpdateBaseline {
+		mergedFindings := baseline.MergeFindings(existingBaselineFindings, currentFindings)
+		if err := baseline.Save(baselinePath, mergedFindings); err != nil {
+			return fmt.Errorf("failed to save updated baseline to %s: %w", baselinePath, err)
+		}
+		slog.Debug("baseline updated",
+			slog.String("baseline_file", baselinePath),
+			slog.Int("total_findings", len(mergedFindings)),
 		)
 	}
-
-	if !cfg.UpdateBaseline {
-		return nil
-	}
-
-	newFingerprints := baseline.CollectFingerprints(report)
-	baseline.AddAll(known, newFingerprints)
-
-	if err := baseline.Save(baselinePath, known); err != nil {
-		return fmt.Errorf("failed to save baseline: %w", err)
-	}
-
-	slog.Info("baseline updated",
-		slog.String("path", baselinePath),
-		slog.Int("fingerprints", len(known)),
-		slog.Int("added", len(newFingerprints)),
-	)
 
 	return nil
 }
