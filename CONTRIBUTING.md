@@ -1,57 +1,49 @@
 # Contributing to ClickSpectre
 
-Thanks for helping improve ClickSpectre. Keep changes focused, testable, and documented.
+We welcome contributions to ClickSpectre! To ensure a smooth collaboration, please follow these guidelines.
 
 ## Prerequisites
 
-- Go `1.25+` (see `go.mod` for the exact toolchain version).
-- A ClickHouse instance for integration testing and end-to-end validation.
-- `golangci-lint` installed locally to run `make lint`.
+Before you start, make sure you have the following installed:
 
-## Build, Test, and Lint
+*   **Go:** Version 1.25 or later.
+*   **ClickHouse:** A running ClickHouse instance is required for integration tests. You can use Docker for easy setup: `docker run -p 8123:8123 -p 9000:9000 --name clickhouse-server -d clickhouse/clickhouse-server`
 
-Run these from the repo root:
+## Build, Test, and Lint Commands
 
-- Build binary: `make build`
-- Run tests (with race detector): `make test`
-- Run linter: `make lint`
-- Generate coverage profile: `go test ./... -coverprofile=coverage.out`
-
-Recommended before opening a PR:
-
-- Format code: `make fmt`
-- Static checks: `make vet`
-- Full local quality pass: `make fmt && make vet && make test && make lint`
+*   **Build:**
+    ```bash
+    go build ./cmd/clickspectre
+    ```
+*   **Test:** Run all unit and integration tests.
+    ```bash
+    go test -race ./...
+    ```
+*   **Lint:** Ensure your code adheres to our style guidelines.
+    ```bash
+    go fmt ./...
+    go vet ./...
+    ```
+    (Note: Additional linters might be configured in CI; ensure your IDE is set up to use `golangci-lint` or similar.)
 
 ## Pull Request Conventions
 
-- Use Conventional Commits, for example:
-  - `feat: add baseline update flag`
-  - `fix: handle nil reporter output`
-  - `docs: clarify clickhouse dsn examples`
-- Add or update tests for any behavior change.
-- Maintain or improve coverage for touched code paths.
-- Keep PRs scoped to one change area when possible.
-- In the PR description, include:
-  - what changed
-  - why it changed
-  - how you validated it (commands and/or manual checks)
+*   **Conventional Commits:** We follow the [Conventional Commits specification](https://www.conventionalcommits.org/en/v1.0.0/) for commit messages. This helps us generate accurate changelogs.
+    *   Examples: `feat: add new feature X`, `fix: correct bug Y`, `docs: update README`
+*   **Test Coverage:** All new features and bug fixes should be accompanied by appropriate unit and/or integration tests. Aim for high test coverage for your changes.
+*   **Descriptive PRs:** Provide a clear and concise description of your changes in the pull request, including the problem it solves and how it was addressed.
+*   **Sign Your Commits:** All commits must be signed off (using `git commit -s`).
 
 ## Architecture Overview
 
-ClickSpectre pipeline:
+ClickSpectre is a Go CLI tool designed to analyze ClickHouse query logs and identify potential table cleanup opportunities.
 
-`ClickHouse -> collector -> analyzer -> scorer -> reporter -> outputs`
+Key components:
 
-Primary modules:
-
-- `cmd/clickspectre`: CLI entrypoints and command wiring.
-- `internal/collector`: ClickHouse query execution, pagination, and data collection.
-- `internal/analyzer`: usage analysis and service-to-table mapping.
-- `internal/scorer`: cleanup-safety scoring logic.
-- `internal/reporter`: JSON and SARIF report generation plus static web assets.
-- `internal/k8s`: Kubernetes IP-to-workload resolution helpers.
-- `internal/baseline`: finding fingerprint generation and baseline filtering.
-- `internal/models`: shared domain models.
-- `pkg/config`: config/flag parsing and validation.
-- `web`: static report assets.
+*   **`cmd/clickspectre`**: Contains the main CLI application entry points and command definitions.
+*   **`internal/collector`**: Responsible for connecting to ClickHouse, querying `system.query_log`, and collecting relevant data.
+*   **`internal/analyzer`**: Processes the collected query logs, maps services to tables (often via Kubernetes IP resolution), and identifies usage patterns.
+*   **`internal/scorer`**: Implements the logic for scoring table cleanup safety based on usage patterns and other factors.
+*   **`internal/reporter`**: Generates various output formats (JSON, HTML, Text, SARIF) for the analysis results.
+*   **`internal/k8s`**: Handles Kubernetes-specific logic, suchs as resolving IP addresses to service names.
+*   **`pkg/config`**: Manages application configuration, including CLI flags and config file parsing.
