@@ -289,7 +289,12 @@ func runAnalyze(cfg *config.Config, isFirstRun bool) error {
 	logAnalysisSummary(cfg, report, duration)
 
 	if isFirstRun {
-		slog.Debug("first run complete", slog.String("tip", "review the report in your browser; exit codes: 0=clean, 1=findings"))
+		slog.Debug("first run complete", slog.String("tip", "review the report in your browser"))
+	}
+
+	findingCount := countFindings(report)
+	if findingCount > 0 {
+		return &FindingsError{Count: findingCount}
 	}
 
 	return nil
