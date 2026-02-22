@@ -28,7 +28,6 @@ type Resolver struct {
 	config      *config.Config
 }
 
-
 // NewResolver creates a new IP→Service resolver
 func NewResolver(cfg *config.Config) (*Resolver, error) {
 	client, err := NewClient(cfg.KubeConfig)
@@ -51,13 +50,11 @@ func NewResolver(cfg *config.Config) (*Resolver, error) {
 func (r *Resolver) ResolveIP(ctx context.Context, ip string) (*ServiceInfo, error) {
 	// 1. Check cache first
 	if cached := r.cache.Get(ip); cached != nil {
-		if r.config.Verbose {
-			slog.Debug("cache hit for IP",
-				slog.String("ip", ip),
-				slog.String("namespace", cached.Namespace),
-				slog.String("service", cached.Service),
-			)
-		}
+		slog.Debug("cache hit for IP",
+			slog.String("ip", ip),
+			slog.String("namespace", cached.Namespace),
+			slog.String("service", cached.Service),
+		)
 		return cached, nil
 	}
 
@@ -70,12 +67,10 @@ func (r *Resolver) ResolveIP(ctx context.Context, ip string) (*ServiceInfo, erro
 	info, err := r.queryK8sAPI(ctx, ip)
 	if err != nil {
 		// Graceful fallback: return IP as-is
-		if r.config.Verbose {
-			slog.Debug("failed to resolve IP, falling back to raw IP",
-				slog.String("ip", ip),
-				slog.String("error", err.Error()),
-			)
-		}
+		slog.Debug("failed to resolve IP, falling back to raw IP",
+			slog.String("ip", ip),
+			slog.String("error", err.Error()),
+		)
 		fallback := &ServiceInfo{
 			Service:   ip,
 			Namespace: "",
@@ -89,14 +84,12 @@ func (r *Resolver) ResolveIP(ctx context.Context, ip string) (*ServiceInfo, erro
 	// 4. Cache result
 	r.cache.Set(ip, info)
 
-	if r.config.Verbose {
-		slog.Debug("resolved IP",
-			slog.String("ip", ip),
-			slog.String("namespace", info.Namespace),
-			slog.String("service", info.Service),
-			slog.String("pod", info.Pod),
-		)
-	}
+	slog.Debug("resolved IP",
+		slog.String("ip", ip),
+		slog.String("namespace", info.Namespace),
+		slog.String("service", info.Service),
+		slog.String("pod", info.Pod),
+	)
 
 	return info, nil
 }
@@ -112,12 +105,10 @@ func (r *Resolver) queryK8sAPI(ctx context.Context, ip string) (*ServiceInfo, er
 	cleanIP := ip
 	if len(ip) > 7 && ip[:7] == "::ffff:" {
 		cleanIP = ip[7:]
-		if r.config.Verbose {
-			slog.Debug("stripped IPv6-mapped prefix",
-				slog.String("ip", ip),
-				slog.String("clean_ip", cleanIP),
-			)
-		}
+		slog.Debug("stripped IPv6-mapped prefix",
+			slog.String("ip", ip),
+			slog.String("clean_ip", cleanIP),
+		)
 	}
 
 	// Strategy 1: Try to find by pod IP
@@ -135,18 +126,14 @@ func (r *Resolver) queryK8sAPI(ctx context.Context, ip string) (*ServiceInfo, er
 	}
 
 	// Strategy 2: Try to find by service IP (ClusterIP, LoadBalancer, External IP)
-	if r.config.Verbose {
-		slog.Debug("no pod found, trying service IPs", slog.String("ip", cleanIP))
-	}
+	slog.Debug("no pod found, trying service IPs", slog.String("ip", cleanIP))
 
 	serviceInfo, err := r.findServiceByIP(queryCtx, cleanIP)
 	if err == nil && serviceInfo != nil {
-		if r.config.Verbose {
-			slog.Debug("found service by IP",
-				slog.String("namespace", serviceInfo.Namespace),
-				slog.String("service", serviceInfo.Service),
-			)
-		}
+		slog.Debug("found service by IP",
+			slog.String("namespace", serviceInfo.Namespace),
+			slog.String("service", serviceInfo.Service),
+		)
 		return serviceInfo, nil
 	}
 
@@ -198,13 +185,11 @@ func (r *Resolver) findServiceByIP(ctx context.Context, ip string) (*ServiceInfo
 	for _, svc := range services.Items {
 		// Check ClusterIP
 		if svc.Spec.ClusterIP == ip {
-			if r.config.Verbose {
-				slog.Debug("matched ClusterIP",
-					slog.String("namespace", svc.Namespace),
-					slog.String("service", svc.Name),
-					slog.String("ip", ip),
-				)
-			}
+			slog.Debug("matched ClusterIP",
+				slog.String("namespace", svc.Namespace),
+				slog.String("service", svc.Name),
+				slog.String("ip", ip),
+			)
 			return &ServiceInfo{
 				Service:   svc.Name,
 				Namespace: svc.Namespace,
@@ -215,13 +200,11 @@ func (r *Resolver) findServiceByIP(ctx context.Context, ip string) (*ServiceInfo
 		// Check LoadBalancer Ingress IPs
 		for _, ingress := range svc.Status.LoadBalancer.Ingress {
 			if ingress.IP == ip {
-				if r.config.Verbose {
-					slog.Debug("matched LoadBalancer IP",
-						slog.String("namespace", svc.Namespace),
-						slog.String("service", svc.Name),
-						slog.String("ip", ip),
-					)
-				}
+				slog.Debug("matched LoadBalancer IP",
+					slog.String("namespace", svc.Namespace),
+					slog.String("service", svc.Name),
+					slog.String("ip", ip),
+				)
 				return &ServiceInfo{
 					Service:   svc.Name,
 					Namespace: svc.Namespace,
@@ -233,13 +216,11 @@ func (r *Resolver) findServiceByIP(ctx context.Context, ip string) (*ServiceInfo
 		// Check ExternalIPs
 		for _, externalIP := range svc.Spec.ExternalIPs {
 			if externalIP == ip {
-				if r.config.Verbose {
-					slog.Debug("matched ExternalIP",
-						slog.String("namespace", svc.Namespace),
-						slog.String("service", svc.Name),
-						slog.String("ip", ip),
-					)
-				}
+				slog.Debug("matched ExternalIP",
+					slog.String("namespace", svc.Namespace),
+					slog.String("service", svc.Name),
+					slog.String("ip", ip),
+				)
 				return &ServiceInfo{
 					Service:   svc.Name,
 					Namespace: svc.Namespace,

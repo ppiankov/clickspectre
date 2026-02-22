@@ -68,9 +68,7 @@ func (a *Analyzer) buildServiceModel(ctx context.Context, entries []*models.Quer
 		}
 	}
 
-	if a.config.Verbose {
-		slog.Debug("built service model", slog.Int("services", len(a.services)))
-	}
+	slog.Debug("built service model", slog.Int("services", len(a.services)))
 
 	return nil
 }

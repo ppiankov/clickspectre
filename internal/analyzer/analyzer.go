@@ -42,9 +42,7 @@ func New(cfg *config.Config, resolver k8s.K8sResolverInterface, collector Collec
 
 // Analyze processes query log entries and builds all data models
 func (a *Analyzer) Analyze(ctx context.Context, entries []*models.QueryLogEntry) error {
-	if a.config.Verbose {
-		slog.Debug("starting analysis", slog.Int("query_entries", len(entries)))
-	}
+	slog.Debug("starting analysis", slog.Int("query_entries", len(entries)))
 
 	// 1. Build table usage model
 	if err := a.buildTableModel(entries); err != nil {
@@ -80,14 +78,12 @@ func (a *Analyzer) Analyze(ctx context.Context, entries []*models.QueryLogEntry)
 		return fmt.Errorf("failed to generate sparklines: %w", err)
 	}
 
-	if a.config.Verbose {
-		slog.Debug("analysis complete",
-			slog.Int("tables", len(a.tables)),
-			slog.Int("services", len(a.services)),
-			slog.Int("edges", len(a.edges)),
-			slog.Int("anomalies", len(a.anomalies)),
-		)
-	}
+	slog.Debug("analysis complete",
+		slog.Int("tables", len(a.tables)),
+		slog.Int("services", len(a.services)),
+		slog.Int("edges", len(a.edges)),
+		slog.Int("anomalies", len(a.anomalies)),
+	)
 
 	return nil
 }
@@ -115,9 +111,7 @@ func (a *Analyzer) Anomalies() []*models.Anomaly {
 // enrichWithCompleteInventory enriches the analysis with complete table inventory from system.tables
 // This detects tables that have zero usage in the query logs
 func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
-	if a.config.Verbose {
-		slog.Debug("fetching complete table inventory", slog.String("source", "system.tables"))
-	}
+	slog.Debug("fetching complete table inventory", slog.String("source", "system.tables"))
 
 	// 1. Fetch complete table inventory from system.tables
 	allTables, err := a.collector.FetchTableMetadata(ctx)
@@ -125,9 +119,7 @@ func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch table metadata: %w", err)
 	}
 
-	if a.config.Verbose {
-		slog.Debug("table inventory fetched", slog.Int("tables", len(allTables)))
-	}
+	slog.Debug("table inventory fetched", slog.Int("tables", len(allTables)))
 
 	// 2. Merge with existing usage data
 	zeroUsageCount := 0
@@ -159,12 +151,10 @@ func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {
 		}
 	}
 
-	if a.config.Verbose {
-		slog.Debug("table inventory enrichment complete",
-			slog.Int("total_tables", len(a.tables)),
-			slog.Int("zero_usage_tables", zeroUsageCount),
-		)
-	}
+	slog.Debug("table inventory enrichment complete",
+		slog.Int("total_tables", len(a.tables)),
+		slog.Int("zero_usage_tables", zeroUsageCount),
+	)
 
 	return nil
 }
