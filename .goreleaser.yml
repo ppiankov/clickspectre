@@ -20,17 +20,13 @@ builds:
 
 archives:
   - id: default
-    name_template: >-
-      {{ .ProjectName }}-{{ .Os }}-{{ if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     formats:
       - tar.gz
     format_overrides:
       - goos: windows
         formats:
           - zip
-    files:
-      - LICENSE
-      - README.md
 
 checksum:
   name_template: checksums.txt
@@ -58,14 +54,15 @@ brews:
     repository:
       owner: ppiankov
       name: homebrew-tap
-      branch: main
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: https://github.com/ppiankov/clickspectre
-    description: ClickHouse usage analyzer for safe table cleanup.
+    description: "ClickHouse usage analyzer — identifies unused tables, service dependencies, and cleanup recommendations"
     license: MIT
     commit_author:
-      name: clickspectre-bot
-      email: 41898282+github-actions[bot]@users.noreply.github.com
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    install: |
+      bin.install "clickspectre"
     test: |
-      system "#{bin}/clickspectre", "version"
+      assert_match "clickspectre", shell_output("#{bin}/clickspectre version")
