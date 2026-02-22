@@ -48,3 +48,8 @@ temp/
 *.kubeconfig
 kubeconfig-*
 
+# Internal planning
+
+# Build artifacts
+dist/
+
