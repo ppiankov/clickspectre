@@ -5,6 +5,27 @@ All notable changes to ClickSpectre will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-02-22
+
+### Added
+- Structured exit codes (0=success, 1=internal, 2=invalid args, 3=not found, 5=network, 6=findings)
+- SKILL.md for agent integration
+- Agent integration section in README
+- Trivy security scanning in CI
+- Baseline mode for suppressing known findings
+- SARIF output format
+- Config file support (.clickspectre.yaml)
+- CONTRIBUTING.md guidelines
+
+### Changed
+- Simplified verbose logging to use slog level directly
+- Release workflow separated into test and release jobs
+- Archive naming aligned with spectre family convention
+- GoReleaser Homebrew tap integration with auto-push
+
+### Fixed
+- Homebrew tap token name aligned with spectre family (HOMEBREW_TAP_TOKEN)
+
 ## [1.0.0] - 2026-02-02
 
 ### Added
@@ -39,4 +60,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SHA256 checksum generation for all releases
 - Auto-generated release notes
 
+[1.0.1]: https://github.com/ppiankov/clickspectre/releases/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ppiankov/clickspectre/releases/tag/v1.0.0
