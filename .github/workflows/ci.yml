@@ -59,3 +59,26 @@ jobs:
 
     - name: Run golangci-lint
       run: golangci-lint run --timeout=5m
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: fs
+        scan-ref: .
+        format: sarif
+        output: trivy-results.sarif
+
+    - name: Upload Trivy results
+      uses: github/codeql-action/upload-sarif@v4
+      if: always()
+      with:
+        sarif_file: trivy-results.sarif
