@@ -382,13 +382,6 @@ func extractHost(dsn string) string {
 	return "unknown"
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func logConnectionSettings(cfg *config.Config) {
 	slog.Debug("connection settings",
 		slog.String("clickhouse_host", extractHost(cfg.ClickHouseDSN)),
