@@ -288,6 +288,23 @@ clickspectre analyze \
   --baseline ./.clickspectre-baseline.json
 ```
 
+### Agent Integration
+
+ClickSpectre is designed for autonomous agent use. Single binary, deterministic output, structured JSON, bounded execution.
+
+```bash
+# Agent install (no brew needed)
+curl -LO "https://github.com/ppiankov/clickspectre/releases/latest/download/clickspectre_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/').tar.gz"
+tar -xzf clickspectre_*.tar.gz && sudo mv clickspectre /usr/local/bin/
+```
+
+Agents: read [`SKILL.md`](SKILL.md) for commands, flags, JSON output structure, and exit codes.
+
+Key patterns:
+- `clickspectre analyze --clickhouse-dsn <dsn> --format json` — table usage audit with cleanup recommendations
+- `clickspectre analyze --clickhouse-dsn <dsn> --format sarif` — findings as SARIF for GitHub Security tab
+- Exit code 6 means findings detected (unused tables, cleanup recommendations)
+
 ## CLI Commands
 
 ### `analyze`
@@ -524,6 +541,17 @@ ClickSpectre follows a modular architecture:
 - **Scorer**: Evaluates tables for cleanup safety
 - **Reporter**: Generates JSON+HTML, text, or SARIF outputs
 - **K8s Resolver**: (Optional) Resolves IPs to Kubernetes services
+
+## Exit Codes
+
+| Code | Meaning | Agent action |
+|------|---------|--------------|
+| 0 | Success — no findings | No action needed |
+| 1 | Internal error | Retry or escalate |
+| 2 | Invalid argument | Fix flags and retry |
+| 3 | Not found | Check paths |
+| 5 | Network error | Check ClickHouse connectivity |
+| 6 | Findings detected | Parse JSON output for details |
 
 ## Safety Mechanisms
 
