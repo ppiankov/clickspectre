@@ -63,9 +63,7 @@ func (a *Analyzer) buildTableModel(entries []*models.QueryLogEntry) error {
 		}
 	}
 
-	if a.config.Verbose {
-		slog.Debug("built table model", slog.Int("tables", len(a.tables)))
-	}
+	slog.Debug("built table model", slog.Int("tables", len(a.tables)))
 
 	return nil
 }
@@ -123,9 +121,7 @@ func (a *Analyzer) generateSparklines(entries []*models.QueryLogEntry) error {
 		table.Sparkline = points
 	}
 
-	if a.config.Verbose {
-		slog.Debug("generated sparklines", slog.Int("tables", len(a.tables)))
-	}
+	slog.Debug("generated sparklines", slog.Int("tables", len(a.tables)))
 
 	return nil
 }

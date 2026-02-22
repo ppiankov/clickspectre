@@ -4,17 +4,20 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/ppiankov/clickspectre/internal/app"
 	"github.com/ppiankov/clickspectre/internal/logging"
 	"github.com/spf13/cobra"
 )
 
 var (
-	version = "1.0.0-stage1"
-	verbose bool
+	version    = "1.0.0-stage1"
+	verbose    bool
+	isFirstRun bool
 )
 
 func main() {
 	logging.Init(false)
+	isFirstRun = app.IsFirstRun()
 
 	root := &cobra.Command{
 		Use:   "clickspectre",

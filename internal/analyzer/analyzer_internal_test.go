@@ -44,11 +44,11 @@ func TestBuildTableModel(t *testing.T) {
 			Tables:    []string{"db1.table1", "db2.table2"},
 		},
 		{
-			QueryID:   "q2",
-			EventTime: now.Add(-1 * time.Hour),
-			QueryKind: "INSERT",
+			QueryID:     "q2",
+			EventTime:   now.Add(-1 * time.Hour),
+			QueryKind:   "INSERT",
 			WrittenRows: 5,
-			Tables:    []string{"db1.table1"},
+			Tables:      []string{"db1.table1"},
 		},
 		{
 			QueryID:   "q3",
@@ -79,11 +79,11 @@ func TestBuildTableModel(t *testing.T) {
 			Tables:    []string{"db1.table1"},
 		},
 		{
-			QueryID:   "q7",
-			EventTime: now.Add(-1 * time.Minute),
-			QueryKind: "ALTER",
+			QueryID:     "q7",
+			EventTime:   now.Add(-1 * time.Minute),
+			QueryKind:   "ALTER",
 			WrittenRows: 1, // Write operation, 1 row written
-			Tables:    []string{"db1.table1"},
+			Tables:      []string{"db1.table1"},
 		},
 	}
 
@@ -431,12 +431,12 @@ func TestBuildEdges(t *testing.T) {
 			Tables:    []string{"db.tableA", "db.tableB"},
 		},
 		{
-			QueryID:   "q2",
-			EventTime: now.Add(-2 * time.Hour),
-			ClientIP:  "1.1.1.1",
-			QueryKind: "INSERT",
+			QueryID:     "q2",
+			EventTime:   now.Add(-2 * time.Hour),
+			ClientIP:    "1.1.1.1",
+			QueryKind:   "INSERT",
 			WrittenRows: 5,
-			Tables:    []string{"db.tableA"}, // Update existing edge
+			Tables:      []string{"db.tableA"}, // Update existing edge
 		},
 		{
 			QueryID:   "q3",
@@ -455,12 +455,12 @@ func TestBuildEdges(t *testing.T) {
 			Tables:    []string{"db1.excluded_table"}, // Excluded table
 		},
 		{
-			QueryID:   "q5",
-			EventTime: now.Add(-10 * time.Minute),
-			ClientIP:  "1.1.1.1",
-			QueryKind: "ALTER",
+			QueryID:     "q5",
+			EventTime:   now.Add(-10 * time.Minute),
+			ClientIP:    "1.1.1.1",
+			QueryKind:   "ALTER",
 			WrittenRows: 2,
-			Tables:    []string{"db.tableB"}, // Update existing edge
+			Tables:      []string{"db.tableB"}, // Update existing edge
 		},
 	}
 
@@ -575,15 +575,11 @@ func TestDetectAnomalies(t *testing.T) {
 	// Helper to create an analyzer with specific tables and services
 	newTestAnalyzer := func(tables map[string]*models.Table, services map[string]*models.Service) *Analyzer {
 		a := New(cfg, nil, nil)
-		if tables != nil {
-			for k, v := range tables {
-				a.Tables()[k] = v
-			}
+		for k, v := range tables {
+			a.Tables()[k] = v
 		}
-		if services != nil {
-			for k, v := range services {
-				a.Services()[k] = v
-			}
+		for k, v := range services {
+			a.Services()[k] = v
 		}
 		return a
 	}

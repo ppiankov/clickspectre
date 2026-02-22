@@ -85,9 +85,7 @@ func (a *Analyzer) detectAnomalies() error {
 		}
 	}
 
-	if a.config.Verbose {
-		slog.Debug("detected anomalies", slog.Int("count", len(a.anomalies)))
-	}
+	slog.Debug("detected anomalies", slog.Int("count", len(a.anomalies)))
 
 	return nil
 }
