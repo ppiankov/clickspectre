@@ -48,6 +48,12 @@ temp/
 *.kubeconfig
 kubeconfig-*
 
+# Internal planning
+docs/work-orders.md
+
+# Build artifacts
+dist/
+
 # Claude Code
 .claude/
 CLAUDE.local.md
