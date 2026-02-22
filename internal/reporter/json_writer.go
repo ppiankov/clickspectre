@@ -30,9 +30,7 @@ func WriteJSON(report *models.Report, cfg *config.Config) error {
 		return fmt.Errorf("failed to write report.json: %w", err)
 	}
 
-	if cfg.Verbose {
-		slog.Debug("report written", slog.String("path", outputPath))
-	}
+	slog.Debug("report written", slog.String("path", outputPath))
 
 	return nil
 }

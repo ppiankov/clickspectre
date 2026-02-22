@@ -98,15 +98,13 @@ func GenerateRecommendations(
 		return zeroUsageReplicated[i].SizeMB > zeroUsageReplicated[j].SizeMB
 	})
 
-	if config.Verbose {
-		slog.Debug("recommendations summary",
-			slog.Int("zero_usage_non_replicated", len(zeroUsageNonReplicated)),
-			slog.Int("zero_usage_replicated", len(zeroUsageReplicated)),
-			slog.Int("safe_to_drop", len(safeToDrop)),
-			slog.Int("likely_safe", len(likelySafe)),
-			slog.Int("keep", len(keep)),
-		)
-	}
+	slog.Debug("recommendations summary",
+		slog.Int("zero_usage_non_replicated", len(zeroUsageNonReplicated)),
+		slog.Int("zero_usage_replicated", len(zeroUsageReplicated)),
+		slog.Int("safe_to_drop", len(safeToDrop)),
+		slog.Int("likely_safe", len(likelySafe)),
+		slog.Int("keep", len(keep)),
+	)
 
 	return models.CleanupRecommendations{
 		ZeroUsageNonReplicated: zeroUsageNonReplicated,
