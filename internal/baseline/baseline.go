@@ -18,15 +18,15 @@ const DefaultPath = ".clickspectre_baseline.json"
 // These fields should be stable across different runs and should not include volatile data
 // like timestamps, sizes, or metrics.
 type StableFinding struct {
-	Type            string `json:"type"`                      // e.g., "anomaly", "zero_usage_non_replicated_table"
-	Description     string `json:"description,omitempty"`     // Anomaly description
-	Severity        string `json:"severity,omitempty"`        // Anomaly severity
-	AffectedTable   string `json:"affected_table,omitempty"`  // Anomaly affected table
-	AffectedService string `json:"affected_service,omitempty"`// Anomaly affected service
-	TableName       string `json:"table_name,omitempty"`      // TableRecommendation name
-	DatabaseName    string `json:"database_name,omitempty"`   // TableRecommendation database
-	Engine          string `json:"engine,omitempty"`          // TableRecommendation engine
-	IsReplicated    bool   `json:"is_replicated,omitempty"`   // TableRecommendation IsReplicated status
+	Type            string `json:"type"`                       // e.g., "anomaly", "zero_usage_non_replicated_table"
+	Description     string `json:"description,omitempty"`      // Anomaly description
+	Severity        string `json:"severity,omitempty"`         // Anomaly severity
+	AffectedTable   string `json:"affected_table,omitempty"`   // Anomaly affected table
+	AffectedService string `json:"affected_service,omitempty"` // Anomaly affected service
+	TableName       string `json:"table_name,omitempty"`       // TableRecommendation name
+	DatabaseName    string `json:"database_name,omitempty"`    // TableRecommendation database
+	Engine          string `json:"engine,omitempty"`           // TableRecommendation engine
+	IsReplicated    bool   `json:"is_replicated,omitempty"`    // TableRecommendation IsReplicated status
 }
 
 // Fingerprint generates a SHA-256 hash of the stable fields of the finding.
@@ -101,7 +101,6 @@ func GenerateFindings(report *models.Report) ([]Finding, error) {
 	processStringRecommendations("safe_to_drop_table", report.CleanupRecommendations.SafeToDrop)
 	processStringRecommendations("likely_safe_table", report.CleanupRecommendations.LikelySafe)
 	processStringRecommendations("keep_table", report.CleanupRecommendations.Keep)
-
 
 	// Generate fingerprints for all stable findings
 	for _, sf := range stableFindings {

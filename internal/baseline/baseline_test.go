@@ -274,15 +274,15 @@ func TestMergeFindings(t *testing.T) {
 
 func TestSplitTableName(t *testing.T) {
 	tests := []struct {
-		input    string
-		expectedDB string
+		input       string
+		expectedDB  string
 		expectedTbl string
 	}{
 		{"mydb.mytable", "mydb", "mytable"},
 		{"mytable", "", "mytable"},
 		{"", "", ""},
 		{".mytable", "", "mytable"}, // Malformed, but should handle gracefully
-		{"mydb.", "mydb", ""},      // Malformed, but should handle gracefully
+		{"mydb.", "mydb", ""},       // Malformed, but should handle gracefully
 	}
 
 	for _, test := range tests {
