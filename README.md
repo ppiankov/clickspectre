@@ -553,6 +553,23 @@ ClickSpectre follows a modular architecture:
 | 5 | Network error | Check ClickHouse connectivity |
 | 6 | Findings detected | Parse JSON output for details |
 
+## Project Status
+
+**Status: Stable** · **v1.0.1** · Maintenance mode
+
+| Milestone | Status |
+|-----------|--------|
+| Core functionality | Complete |
+| Test coverage >85% | Complete |
+| Structured exit codes | Complete |
+| SKILL.md agent integration | Complete |
+| CI pipeline (test/lint/scan) | Complete |
+| Homebrew distribution | Complete |
+| SARIF output format | Complete |
+| Baseline mode | Complete |
+| Config file support | Complete |
+| v1.0 release | Complete |
+
 ## Safety Mechanisms
 
 ### ClickHouse Protection
