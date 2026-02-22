@@ -50,9 +50,7 @@ func NewClickHouseClient(cfg *config.Config) (*ClickHouseClient, error) {
 		return nil, fmt.Errorf("failed to ping ClickHouse: %w", err)
 	}
 
-	if cfg.Verbose {
-		slog.Debug("connected to ClickHouse", slog.String("addr", opts.Addr[0]))
-	}
+	slog.Debug("connected to ClickHouse", slog.String("addr", opts.Addr[0]))
 
 	return &ClickHouseClient{
 		conn:   conn,
@@ -146,18 +144,14 @@ func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Confi
 		allEntries = append(allEntries, batch...)
 		totalProcessed += len(batch)
 
-		if cfg.Verbose {
-			slog.Debug("processed query log entries",
-				slog.Int("batch_count", len(batch)),
-				slog.Int("total_processed", totalProcessed),
-			)
-		}
+		slog.Debug("processed query log entries",
+			slog.Int("batch_count", len(batch)),
+			slog.Int("total_processed", totalProcessed),
+		)
 
 		// Check max rows limit
 		if totalProcessed >= cfg.MaxRows {
-			if cfg.Verbose {
-				slog.Debug("max rows limit reached", slog.Int("max_rows", cfg.MaxRows))
-			}
+			slog.Debug("max rows limit reached", slog.Int("max_rows", cfg.MaxRows))
 			break
 		}
 
@@ -169,9 +163,7 @@ func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Confi
 		offset += cfg.BatchSize
 	}
 
-	if cfg.Verbose {
-		slog.Debug("total query log entries collected", slog.Int("total_entries", len(allEntries)))
-	}
+	slog.Debug("total query log entries collected", slog.Int("total_entries", len(allEntries)))
 
 	return allEntries, nil
 }
@@ -209,12 +201,10 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 					slog.String("hint", "column type mismatch; run with --verbose for details"),
 				)
 			}
-			if c.config.Verbose {
-				slog.Debug("failed to scan row",
-					slog.Int("row", rowNum),
-					slog.String("error", err.Error()),
-				)
-			}
+			slog.Debug("failed to scan row",
+				slog.Int("row", rowNum),
+				slog.String("error", err.Error()),
+			)
 			// Try to skip this row and continue
 			continue
 		}
@@ -222,20 +212,16 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 		// Validate essential fields
 		if entry.QueryID == "" || entry.Query == "" {
 			skippedRows++
-			if c.config.Verbose {
-				slog.Debug("row has empty essential fields", slog.Int("row", rowNum))
-			}
+			slog.Debug("row has empty essential fields", slog.Int("row", rowNum))
 			continue
 		}
 
 		// Truncate extremely long queries (handle in Go instead of SQL)
 		if len(entry.Query) > 100000 {
-			if c.config.Verbose {
-				slog.Debug("row has very long query, truncating",
-					slog.Int("row", rowNum),
-					slog.Int("query_chars", len(entry.Query)),
-				)
-			}
+			slog.Debug("row has very long query, truncating",
+				slog.Int("row", rowNum),
+				slog.Int("query_chars", len(entry.Query)),
+			)
 			entry.Query = entry.Query[:100000] + "... [truncated]"
 		}
 
@@ -245,12 +231,10 @@ func (c *ClickHouseClient) processBatch(rows *sql.Rows) ([]*models.QueryLogEntry
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					if c.config.Verbose {
-						slog.Debug("panic while extracting tables",
-							slog.Int("row", rowNum),
-							slog.String("panic", fmt.Sprint(r)),
-						)
-					}
+					slog.Debug("panic while extracting tables",
+						slog.Int("row", rowNum),
+						slog.String("panic", fmt.Sprint(r)),
+					)
 					entry.Tables = []string{}
 				}
 			}()
@@ -369,9 +353,7 @@ func (c *ClickHouseClient) FetchTableMetadata(ctx context.Context) (map[string]*
 		var depDatabases, depTables sql.NullString
 
 		if err := rows.Scan(&database, &name, &engine, &totalBytes, &totalRows, &createTime, &depDatabases, &depTables); err != nil {
-			if c.config.Verbose {
-				slog.Debug("failed to scan table metadata", slog.String("error", err.Error()))
-			}
+			slog.Debug("failed to scan table metadata", slog.String("error", err.Error()))
 			continue
 		}
 

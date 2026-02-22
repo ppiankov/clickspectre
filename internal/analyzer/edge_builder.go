@@ -73,9 +73,7 @@ func (a *Analyzer) buildEdges(entries []*models.QueryLogEntry) error {
 		a.edges = append(a.edges, edge)
 	}
 
-	if a.config.Verbose {
-		slog.Debug("built service to table edges", slog.Int("count", len(a.edges)))
-	}
+	slog.Debug("built service to table edges", slog.Int("count", len(a.edges)))
 
 	return nil
 }
