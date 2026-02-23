@@ -1,4 +1,5 @@
 # ClickSpectre
+[![ANCC](https://img.shields.io/badge/ANCC-compliant-brightgreen)](https://ancc.dev)
 
 **ClickHouse usage analyzer that determines which tables are used, by whom, and which are safe to clean up.**
 
