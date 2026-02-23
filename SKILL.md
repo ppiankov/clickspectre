@@ -15,94 +15,35 @@ You have access to `clickspectre`, a ClickHouse usage analyzer that identifies u
 brew install ppiankov/tap/clickspectre
 ```
 
-Or download binary:
-
-```bash
-curl -LO https://github.com/ppiankov/clickspectre/releases/latest/download/clickspectre_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m).tar.gz
-tar -xzf clickspectre_*.tar.gz
-sudo mv clickspectre /usr/local/bin/
-```
-
 ## Commands
 
-| Command | What it does |
-|---------|-------------|
-| `clickspectre analyze --clickhouse-dsn <dsn>` | Analyze ClickHouse usage and generate report |
-| `clickspectre analyze --format json` | JSON output for parsing |
-| `clickspectre analyze --format sarif` | SARIF output for CI integration |
-| `clickspectre serve` | Serve generated report locally |
-| `clickspectre deploy` | Deploy report to Kubernetes |
-| `clickspectre version` | Print version info |
+### clickspectre analyze
 
-`analyze` has alias `audit`.
+Analyze ClickHouse usage and generate report. Alias: `audit`.
 
-## Key Flags
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN (required)
+- `--format json` — output format: json, text, sarif (default: json)
+- `--output` — output directory (default: ./report)
+- `--lookback` — lookback period, e.g. 7d, 30d, 90d (default: 30d)
+- `--resolve-k8s` — enable Kubernetes IP resolution
+- `--kubeconfig` — path to kubeconfig (default: ~/.kube/config)
+- `--batch-size` — query log batch size (default: 100000)
+- `--max-rows` — max query log rows to process (default: 1000000)
+- `--query-timeout` — query timeout (default: 5m)
+- `--detect-unused-tables` — detect tables with zero usage in query logs
+- `--min-table-size` — minimum table size in MB for unused table recommendations (default: 1)
+- `--exclude-table` — exclude table pattern (repeatable, supports glob)
+- `--exclude-database` — exclude database pattern (repeatable, supports glob)
+- `--baseline` — path to baseline file for suppressing known findings
+- `--update-baseline` — update baseline with current findings
+- `--dry-run` — dry run mode (don't write output)
+- `--config` — path to config file (default: auto-load .clickspectre.yaml)
+- `--concurrency` — worker pool size (default: 5)
+- `--anomaly-detection` — enable anomaly detection (default: true)
+- `--verbose` — verbose logging
 
-### analyze / audit
-
-| Flag | Description |
-|------|-------------|
-| `--clickhouse-dsn` | ClickHouse DSN (required) |
-| `--format` | Output format: json, text, sarif (default: json) |
-| `--output` | Output directory (default: ./report) |
-| `--lookback` | Lookback period, e.g. 7d, 30d, 90d (default: 30d) |
-| `--resolve-k8s` | Enable Kubernetes IP resolution |
-| `--kubeconfig` | Path to kubeconfig (default: ~/.kube/config) |
-| `--batch-size` | Query log batch size (default: 100000) |
-| `--max-rows` | Max query log rows to process (default: 1000000) |
-| `--query-timeout` | Query timeout, e.g. 5m, 10m (default: 5m) |
-| `--detect-unused-tables` | Detect tables with zero usage in query logs |
-| `--min-table-size` | Minimum table size in MB for unused table recommendations (default: 1) |
-| `--exclude-table` | Exclude table pattern (repeatable, supports glob) |
-| `--exclude-database` | Exclude database pattern (repeatable, supports glob) |
-| `--baseline` | Path to baseline file for suppressing known findings |
-| `--update-baseline` | Update baseline with current findings |
-| `--dry-run` | Dry run mode (don't write output) |
-| `--config` | Path to config file (default: auto-load .clickspectre.yaml) |
-| `--concurrency` | Worker pool size (default: 5) |
-| `--min-query-count` | Minimum query count to consider a table active |
-| `--anomaly-detection` | Enable anomaly detection (default: true) |
-| `--include-mv-deps` | Include materialized view dependencies (default: true) |
-
-### serve
-
-| Flag | Description |
-|------|-------------|
-| `--port` | Port to serve on (default: 8080) |
-| `--dir` | Directory to serve (default: ./report) |
-
-### deploy
-
-| Flag | Description |
-|------|-------------|
-| `--kubeconfig` | Path to kubeconfig (default: ~/.kube/config) |
-| `-n`, `--namespace` | Kubernetes namespace (default: default) |
-| `-p`, `--port` | Local port for port-forward (default: 8080) |
-| `--open` | Automatically open browser (default: true) |
-| `--ingress-host` | Host for Ingress (e.g. clickspectre.example.com) |
-| `--report` | Report directory to deploy (default: ./report) |
-
-### Global
-
-| Flag | Description |
-|------|-------------|
-| `--verbose` | Verbose logging |
-
-## Exit Codes
-
-| Code | Meaning | Agent action |
-|------|---------|--------------|
-| `0` | Success (no findings) | Continue |
-| `1` | Internal error | Fail job |
-| `2` | Invalid arguments | Fix command and retry |
-| `3` | Not found (DSN unreachable) | Check connectivity |
-| `5` | Network error | Retry with backoff |
-| `6` | Findings detected | Parse JSON and report |
-
-## JSON Output Structure
-
-### analyze --format json
-
+**JSON output:**
 ```json
 {
   "tool": "clickspectre",
@@ -120,9 +61,7 @@ sudo mv clickspectre /usr/local/bin/
       "engine": "MergeTree",
       "total_rows": 50000000,
       "total_bytes": 2147483648,
-      "query_count": 1250,
-      "read_count": 1100,
-      "write_count": 150
+      "query_count": 1250
     }
   ],
   "services": [
@@ -130,7 +69,6 @@ sudo mv clickspectre /usr/local/bin/
       "name": "analytics-service",
       "ip": "10.0.1.5",
       "k8s_pod": "analytics-service-abc123",
-      "k8s_namespace": "production",
       "query_count": 500
     }
   ],
@@ -152,15 +90,64 @@ sudo mv clickspectre /usr/local/bin/
   ],
   "cleanup_recommendations": {
     "zero_usage_non_replicated": ["default.tmp_import"],
-    "zero_usage_replicated": ["default.old_events_replica"],
     "safe_to_drop": ["default.tmp_import"],
-    "likely_safe": ["default.old_events_replica"],
     "keep": ["default.events", "default.users"]
   }
 }
 ```
 
-## What clickspectre Does NOT Do
+**Exit codes:**
+- 0: success (no findings)
+- 1: internal error
+- 2: invalid arguments
+- 3: not found (DSN unreachable)
+- 5: network error
+- 6: findings detected
+
+### clickspectre serve
+
+Serve generated report locally.
+
+**Flags:**
+- `--port` — port to serve on (default: 8080)
+- `--dir` — directory to serve (default: ./report)
+
+### clickspectre deploy
+
+Deploy report to Kubernetes.
+
+**Flags:**
+- `--kubeconfig` — path to kubeconfig
+- `--namespace` — Kubernetes namespace (default: default)
+- `--port` — local port for port-forward (default: 8080)
+- `--ingress-host` — host for Ingress
+- `--report` — report directory to deploy (default: ./report)
+
+### clickspectre version
+
+Print version info.
+
+### clickspectre init
+
+Not implemented. Reads `.clickspectre.yaml` from cwd or home directory if present.
+
+## Config file
+
+Create `.clickspectre.yaml` to avoid repeating flags:
+
+```yaml
+clickhouse_dsn: "clickhouse://reader:secret@clickhouse:9000/default"
+lookback: "30d"
+resolve_k8s: true
+format: "json"
+output: "./report"
+detect_unused_tables: true
+exclude_database:
+  - "system"
+  - "INFORMATION_SCHEMA"
+```
+
+## What this does NOT do
 
 - No table creation or deletion — read-only analysis
 - No automatic cleanup — recommendations only, humans decide
@@ -168,86 +155,19 @@ sudo mv clickspectre /usr/local/bin/
 - No real-time monitoring — point-in-time snapshots
 - No MergeTree optimization — reports usage, not tuning
 
-## Agent Usage Patterns
-
-### Basic analysis
+## Parsing examples
 
 ```bash
+# Basic analysis
 clickspectre analyze --clickhouse-dsn "clickhouse://user:pass@host:9000/default" --format json --output ./report
-if [ $? -eq 6 ]; then
-  # Findings detected — parse cleanup recommendations
-  jq '.cleanup_recommendations.safe_to_drop' ./report/report.json
-fi
-```
 
-### Analysis with Kubernetes resolution
+# Parse cleanup recommendations
+jq '.cleanup_recommendations.safe_to_drop' ./report/report.json
 
-```bash
-clickspectre analyze \
-  --clickhouse-dsn "clickhouse://user:pass@host:9000/default" \
-  --resolve-k8s \
-  --kubeconfig ~/.kube/config \
-  --format json \
-  --output ./report
-```
+# Unused table detection with filtering
+clickspectre analyze --clickhouse-dsn "clickhouse://..." --detect-unused-tables --min-table-size 100 --exclude-database "system" --format json
 
-### Unused table detection
-
-```bash
-clickspectre analyze \
-  --clickhouse-dsn "clickhouse://user:pass@host:9000/default" \
-  --detect-unused-tables \
-  --min-table-size 100 \
-  --exclude-database "system" \
-  --exclude-table "_temporary_*" \
-  --format json
-```
-
-### Baseline diffing (suppress known findings)
-
-```bash
-# First run — create baseline
+# Baseline diffing
 clickspectre analyze --clickhouse-dsn "..." --format json --update-baseline --baseline baseline.json
-
-# Subsequent runs — only new findings trigger exit code 6
 clickspectre analyze --clickhouse-dsn "..." --format json --baseline baseline.json
-```
-
-### Serve report locally
-
-```bash
-clickspectre serve --dir ./report --port 9090
-```
-
-### Deploy report to Kubernetes
-
-```bash
-clickspectre deploy ./report --namespace monitoring --ingress-host clickspectre.example.com
-```
-
-### Config file
-
-Create `.clickspectre.yaml` in cwd or home directory to avoid repeating flags:
-
-```yaml
-clickhouse_dsn: "clickhouse://reader:secret@clickhouse:9000/default"
-lookback: "30d"
-resolve_k8s: true
-kubeconfig: "~/.kube/config"
-format: "json"
-output: "./report"
-detect_unused_tables: true
-min_table_size: 10
-exclude_database:
-  - "system"
-  - "INFORMATION_SCHEMA"
-exclude_table:
-  - "_temporary_*"
-  - ".inner.*"
-```
-
-Then run without flags:
-
-```bash
-clickspectre analyze  # uses config defaults
 ```
