@@ -76,9 +76,9 @@ generate cleanup recommendations, and create an interactive visual report.`,
 			cfg.Format = strings.ToLower(cfg.Format)
 			cfg.Normalize()
 			switch cfg.Format {
-			case "json", "text", "sarif":
+			case "json", "text", "sarif", "spectrehub":
 			default:
-				return fmt.Errorf("invalid --format value: %q (supported: json, text, sarif)", cfg.Format)
+				return fmt.Errorf("invalid --format value: %q (supported: json, text, sarif, spectrehub)", cfg.Format)
 			}
 
 			return nil
@@ -110,7 +110,7 @@ generate cleanup recommendations, and create an interactive visual report.`,
 
 	// Output flags
 	cmd.Flags().StringVar(&cfg.OutputDir, "output", "./report", "Output directory")
-	cmd.Flags().StringVar(&cfg.Format, "format", "json", "Output format (json|text|sarif)")
+	cmd.Flags().StringVar(&cfg.Format, "format", "json", "Output format (json|text|sarif|spectrehub)")
 	cmd.Flags().StringVar(&cfg.BaselinePath, "baseline", "", "Path to baseline file for suppressing known findings")
 	cmd.Flags().BoolVar(&cfg.UpdateBaseline, "update-baseline", false, "Update baseline with current findings")
 

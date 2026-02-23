@@ -44,6 +44,10 @@ func (r *reporter) Generate(report *models.Report) error {
 		if err := WriteSARIF(report, r.config); err != nil {
 			return err
 		}
+	case "spectrehub":
+		if err := WriteSpectreHub(report, r.config); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported format %q", r.config.Format)
 	}
