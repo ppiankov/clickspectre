@@ -8,6 +8,20 @@ ClickHouse table usage analyzer and cleanup advisor. Part of [SpectreHub](https:
 
 Analyzes ClickHouse query logs to determine which tables are used, by whom, and which are safe to clean up. Generates interactive visual reports with D3.js bipartite graphs showing service-to-table relationships.
 
+## Why this exists
+
+ClickHouse is fast, powerful, and absolutely unforgiving when your schema grows faster than your documentation. Teams end up with:
+
+- Tables nobody remembers creating
+- Schemas nobody wants to touch
+- "Don't drop this or production dies" tribal knowledge
+- Dashboards pointing at tables last queried during the Bronze Age
+- Zero clarity about which services depend on what
+
+ClickSpectre answers one question: **"Which ClickHouse tables are actually used, and by whom?"**
+
+Born entirely out of real operational pain. Shared so maybe yours hurts less.
+
 ## What it is
 
 - Analyzes ClickHouse `system.query_log` to identify table usage patterns
