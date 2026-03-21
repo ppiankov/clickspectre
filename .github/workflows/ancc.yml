@@ -5,6 +5,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ppiankov/ancc/.github/action@v0.7.0
+      - uses: ppiankov/ancc/.github/action@v0.7.1
         with:
           checks: validate
