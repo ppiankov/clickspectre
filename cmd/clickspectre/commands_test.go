@@ -479,6 +479,76 @@ func TestVersionCommandAndQuantityParser(t *testing.T) {
 	_ = mustParseQuantity("not-a-quantity")
 }
 
+func TestInitCommand(t *testing.T) {
+	t.Run("creates_config_file", func(t *testing.T) {
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+		if err := os.Chdir(dir); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewInitCmd()
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		data, err := os.ReadFile(".clickspectre.yaml")
+		if err != nil {
+			t.Fatalf("config file not created: %v", err)
+		}
+		if !strings.Contains(string(data), "clickhouse_dsn") {
+			t.Fatal("config file missing clickhouse_dsn template")
+		}
+	})
+
+	t.Run("fails_if_exists_without_force", func(t *testing.T) {
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+		if err := os.Chdir(dir); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(".clickspectre.yaml", []byte("existing"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewInitCmd()
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "already exists") {
+			t.Fatalf("expected already exists error, got %v", err)
+		}
+	})
+
+	t.Run("force_overwrites", func(t *testing.T) {
+		dir := t.TempDir()
+		origDir, _ := os.Getwd()
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+		if err := os.Chdir(dir); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(".clickspectre.yaml", []byte("old"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cmd := NewInitCmd()
+		if err := cmd.Flags().Set("force", "true"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("init --force failed: %v", err)
+		}
+
+		data, err := os.ReadFile(".clickspectre.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) == "old" {
+			t.Fatal("config file was not overwritten")
+		}
+	})
+}
+
 func TestNewAnalyzeCmdDSNValidation(t *testing.T) {
 	tests := []struct {
 		name    string
