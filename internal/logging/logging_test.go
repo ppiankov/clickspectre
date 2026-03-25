@@ -2,7 +2,10 @@ package logging
 
 import (
 	"context"
+	"io"
 	"log/slog"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -26,4 +29,77 @@ func TestInitSetsDefaultLevel(t *testing.T) {
 	if !logger.Enabled(context.Background(), slog.LevelDebug) {
 		t.Fatalf("expected debug to be enabled with verbose")
 	}
+}
+
+func TestInitSuppressesInfoByDefault(t *testing.T) {
+	original := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(original)
+	})
+
+	output := captureStderr(t, func() {
+		Init(false)
+		slog.Info("hidden info", slog.String("component", "test"))
+		slog.Error("visible error", slog.String("component", "test"))
+	})
+
+	if strings.Contains(output, "hidden info") {
+		t.Fatalf("expected info to be suppressed, got %q", output)
+	}
+	if !strings.Contains(output, "visible error") {
+		t.Fatalf("expected error output, got %q", output)
+	}
+	if !strings.Contains(output, "level=ERROR") {
+		t.Fatalf("expected text handler output, got %q", output)
+	}
+}
+
+func TestInitEnablesDebugWithVerbose(t *testing.T) {
+	original := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(original)
+	})
+
+	output := captureStderr(t, func() {
+		Init(true)
+		slog.Debug("debug enabled", slog.Int("count", 1))
+	})
+
+	if !strings.Contains(output, "debug enabled") {
+		t.Fatalf("expected debug output, got %q", output)
+	}
+	if !strings.Contains(output, "count=1") {
+		t.Fatalf("expected structured debug field, got %q", output)
+	}
+	if !strings.Contains(output, "level=DEBUG") {
+		t.Fatalf("expected debug level in text handler output, got %q", output)
+	}
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	originalStderr := os.Stderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stderr pipe: %v", err)
+	}
+
+	os.Stderr = writer
+	fn()
+	os.Stderr = originalStderr
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close stderr writer: %v", err)
+	}
+
+	output, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("failed to read stderr output: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("failed to close stderr reader: %v", err)
+	}
+
+	return string(output)
 }

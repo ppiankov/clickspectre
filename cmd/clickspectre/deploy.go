@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -185,7 +186,10 @@ func runDeploy(kubeconfigPath, namespace, reportDir string, localPort int, openB
 	select {
 	case <-readyCh:
 		url := "http://localhost:" + strconv.Itoa(localPort)
-		fmt.Fprintf(os.Stderr, "Deployed to %s (Ctrl+C to stop)\n", url)
+		slog.Info("deployment available",
+			slog.String("url", url),
+			slog.String("stop", "Ctrl+C"),
+		)
 		slog.Debug("port-forward ready", slog.String("url", url))
 	case <-time.After(10 * time.Second):
 		return fmt.Errorf("timeout waiting for port-forward to be ready")
@@ -520,8 +524,13 @@ func portForward(config *rest.Config, namespace string, localPort int, stopCh, r
 		fmt.Sprintf("%d:80", localPort),
 	)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stdout = io.Discard
+		cmd.Stderr = io.Discard
+	}
 
 	if err := cmd.Start(); err != nil {
 		return err

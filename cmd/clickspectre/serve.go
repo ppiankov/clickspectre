@@ -55,10 +55,10 @@ func runServe(dir string, port int) error {
 	addr := fmt.Sprintf(":%d", port)
 
 	url := "http://localhost:" + strconv.Itoa(port)
-	fmt.Fprintf(os.Stderr, "Serving %s at %s (Ctrl+C to stop)\n", dir, url)
-	slog.Debug("report server started",
+	slog.Info("report server started",
 		slog.String("url", url),
 		slog.String("dir", dir),
+		slog.String("stop", "Ctrl+C"),
 	)
 
 	if err := http.ListenAndServe(addr, nil); err != nil {
