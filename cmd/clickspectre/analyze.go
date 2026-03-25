@@ -73,6 +73,15 @@ generate cleanup recommendations, and create an interactive visual report.`,
 				return fmt.Errorf("required flag(s) \"clickhouse-dsn\" or \"clickhouse-url\" not set")
 			}
 
+			parsed, err := url.Parse(cfg.ClickHouseDSN)
+			if err != nil || parsed.Host == "" {
+				return fmt.Errorf("invalid --clickhouse-dsn: expected clickhouse://[user[:pass]@]host[:port]/db")
+			}
+			scheme := strings.ToLower(parsed.Scheme)
+			if scheme != "clickhouse" && scheme != "chhttp" && scheme != "chhttps" {
+				return fmt.Errorf("invalid --clickhouse-dsn scheme %q: expected clickhouse, chhttp, or chhttps", parsed.Scheme)
+			}
+
 			cfg.Format = strings.ToLower(cfg.Format)
 			cfg.Normalize()
 			switch cfg.Format {
@@ -355,13 +364,26 @@ func buildReport(
 	}
 }
 
-// maskDSN masks sensitive information in DSN
+// maskDSN masks the password in a DSN while preserving scheme, user, host, port, and path.
 func maskDSN(dsn string) string {
-	// Simple masking - just show protocol and host
-	if len(dsn) > 20 {
-		return dsn[:20] + "...***"
+	if dsn == "" {
+		return "[empty]"
 	}
-	return "***"
+
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		return "[unparseable DSN]"
+	}
+
+	if parsed.User == nil {
+		return parsed.String()
+	}
+
+	if _, hasPass := parsed.User.Password(); hasPass {
+		return fmt.Sprintf("%s://%s:***@%s%s", parsed.Scheme, parsed.User.Username(), parsed.Host, parsed.RequestURI())
+	}
+
+	return parsed.String()
 }
 
 // extractHost extracts host from DSN

@@ -290,21 +290,40 @@ func TestBuildReportIncludesAnalyzedData(t *testing.T) {
 }
 
 func TestHelpers(t *testing.T) {
-	longDSN := "clickhouse://very-long-and-sensitive-dsn-value"
-	masked := maskDSN(longDSN)
-	if !strings.HasPrefix(masked, longDSN[:20]) || !strings.HasSuffix(masked, "...***") {
-		t.Fatalf("unexpected masked DSN: %q", masked)
+	// maskDSN preserves host and redacts password
+	masked := maskDSN("clickhouse://user:secret@internal-ch-lb-dev-1624398891.eu-central-1.elb.amazonaws.com:9000/default")
+	if !strings.Contains(masked, "internal-ch-lb-dev-1624398891.eu-central-1.elb.amazonaws.com:9000") {
+		t.Fatalf("expected full hostname preserved, got %q", masked)
 	}
-	if got := maskDSN("short"); got != "***" {
-		t.Fatalf("expected short dsn mask to be ***, got %q", got)
+	if strings.Contains(masked, "secret") {
+		t.Fatalf("expected password redacted, got %q", masked)
+	}
+	if !strings.Contains(masked, "***") {
+		t.Fatalf("expected *** in masked DSN, got %q", masked)
+	}
+
+	// maskDSN with no password
+	noPass := maskDSN("clickhouse://readonly@host:9000/db")
+	if !strings.Contains(noPass, "host:9000") {
+		t.Fatalf("expected host preserved for no-password DSN, got %q", noPass)
+	}
+
+	// maskDSN with empty string
+	if got := maskDSN(""); got != "[empty]" {
+		t.Fatalf("expected [empty] for empty DSN, got %q", got)
+	}
+
+	// maskDSN with unparseable input
+	if got := maskDSN("://\x00bad"); got != "[unparseable DSN]" {
+		t.Fatalf("expected [unparseable DSN], got %q", got)
 	}
 
 	host := extractHost("clickhouse://localhost:9000/default")
 	if host == "unknown" {
 		t.Fatalf("expected extracted host, got %q", host)
 	}
-	if got := extractHost("short"); got != "unknown" {
-		t.Fatalf("expected unknown host for short dsn, got %q", got)
+	if got := extractHost(""); got != "unknown" {
+		t.Fatalf("expected unknown host for empty dsn, got %q", got)
 	}
 
 	if got := min(3, 7); got != 3 {
@@ -435,4 +454,74 @@ func TestVersionCommandAndQuantityParser(t *testing.T) {
 		}
 	}()
 	_ = mustParseQuantity("not-a-quantity")
+}
+
+func TestNewAnalyzeCmdDSNValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		dsn     string
+		wantErr string
+	}{
+		{
+			name: "valid_clickhouse_dsn",
+			dsn:  "clickhouse://localhost:9000/default",
+		},
+		{
+			name: "valid_chhttp_dsn",
+			dsn:  "chhttp://localhost:8123/default",
+		},
+		{
+			name: "valid_no_user_or_password",
+			dsn:  "clickhouse://host:9000/db",
+		},
+		{
+			name:    "empty_dsn",
+			dsn:     "",
+			wantErr: "required flag",
+		},
+		{
+			name:    "malformed_no_host",
+			dsn:     "notaurl",
+			wantErr: "invalid --clickhouse-dsn",
+		},
+		{
+			name:    "wrong_scheme",
+			dsn:     "http://host:9000/db",
+			wantErr: "invalid --clickhouse-dsn scheme",
+		},
+		{
+			name:    "postgres_scheme",
+			dsn:     "postgres://host:5432/db",
+			wantErr: "invalid --clickhouse-dsn scheme",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := NewAnalyzeCmd()
+
+			if tc.dsn != "" {
+				if err := cmd.Flags().Set("clickhouse-dsn", tc.dsn); err != nil {
+					t.Fatalf("failed to set clickhouse-dsn flag: %v", err)
+				}
+			}
+			if err := cmd.Flags().Set("lookback", "7d"); err != nil {
+				t.Fatalf("failed to set lookback flag: %v", err)
+			}
+			if err := cmd.Flags().Set("query-timeout", "5m"); err != nil {
+				t.Fatalf("failed to set query-timeout flag: %v", err)
+			}
+
+			err := cmd.PreRunE(cmd, nil)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
 }
