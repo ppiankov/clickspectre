@@ -28,7 +28,7 @@ Analyze ClickHouse query logs to determine table usage, service dependencies, an
 - `--format text` — human-readable text report
 - `--format sarif` — SARIF 2.1.0 for CI/GitHub Security tab
 - `--format spectrehub` — SpectreHub spectre/v1 envelope for cross-tool aggregation
-- `--output ./report` — output directory (default: `./report`)
+- `--output ./report` — output directory (default: `./report`); use `--output -` for stdout
 
 **Analysis flags:**
 - `--lookback 30d` — how far back to scan query_log (default: 30d)
@@ -59,6 +59,7 @@ Analyze ClickHouse query logs to determine table usage, service dependencies, an
 - `--config path` — config file path (default: auto-load `.clickspectre.yaml`)
 - `--dry-run` — show what would be analyzed without writing output
 - `--verbose` — debug logging
+- `-q, --quiet` — suppress non-error output (for agent piping)
 
 **JSON output (--format json):**
 ```json
@@ -155,9 +156,23 @@ Deploy report to Kubernetes as an nginx pod with port-forwarding.
 - 3: report directory not found
 - 5: cluster unreachable
 
+### clickspectre init
+
+Create a `.clickspectre.yaml` config file with commented defaults.
+
+**Flags:**
+- `--force` — overwrite existing config file
+
+**Exit codes:**
+- 0: config created
+- 1: config already exists (without --force) or write error
+
 ### clickspectre version
 
 Show version, commit, Go version, and platform.
+
+**Flags:**
+- `--format json` — output as JSON for agent consumption
 
 **Exit codes:**
 - 0: always
