@@ -95,3 +95,4 @@ jobs:
           labels: ${{ steps.docker_meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.tag.outputs.version }}
+            COMMIT=${{ github.sha }}

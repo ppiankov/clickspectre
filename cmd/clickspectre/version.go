@@ -12,7 +12,7 @@ func NewVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Show version information",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Println(version)
+			cmd.Printf("%s (commit: %s)\n", version, commit)
 			cmd.Printf("go: %s\n", runtime.Version())
 			cmd.Printf("platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 		},

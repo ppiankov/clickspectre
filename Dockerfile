@@ -5,6 +5,7 @@ FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev
+ARG COMMIT=none
 
 WORKDIR /src
 
@@ -17,7 +18,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
 	-trimpath \
-	-ldflags="-s -w -X main.version=${VERSION}" \
+	-ldflags="-s -w -X main.version=${VERSION#v} -X main.commit=${COMMIT}" \
 	-o /out/clickspectre \
 	./cmd/clickspectre && \
 	upx --best --lzma /out/clickspectre

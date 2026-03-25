@@ -1,7 +1,9 @@
 .PHONY: build test clean install lint run help
 
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "1.0.0-stage1")
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION_NUM := $(shell echo "$(VERSION)" | sed 's/^v//')
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+LDFLAGS := -ldflags "-X main.version=$(VERSION_NUM) -X main.commit=$(COMMIT)"
 BINARY := bin/clickspectre
 
 help: ## Show this help message

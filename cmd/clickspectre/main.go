@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	version    = "1.0.0-stage1"
+	version    = "dev"
+	commit     = "none"
 	verbose    bool
 	isFirstRun bool
 )
