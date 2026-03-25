@@ -201,7 +201,11 @@ func applyAnalyzeConfigFileDefaults(
 
 // runAnalyze executes the analysis workflow
 func runAnalyze(cfg *config.Config, isFirstRun bool) error {
-	logging.Init(cfg.Verbose)
+	var logOpts []logging.Option
+	if quiet {
+		logOpts = append(logOpts, logging.WithQuiet())
+	}
+	logging.Init(cfg.Verbose, logOpts...)
 	if isFirstRun {
 		slog.Debug("first-time analysis", slog.String("clickhouse_host", extractHost(cfg.ClickHouseDSN)))
 	}

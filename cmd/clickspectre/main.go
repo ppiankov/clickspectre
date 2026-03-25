@@ -16,6 +16,7 @@ var (
 	version    = "dev"
 	commit     = "none"
 	verbose    bool
+	quiet      bool
 	isFirstRun bool
 )
 
@@ -51,11 +52,16 @@ which tables are used, by whom, and which are safe to clean up.
 It generates visual reports with interactive bipartite graphs showing
 service-to-table relationships, usage statistics, and cleanup recommendations.`,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			logging.Init(verbose)
+			var opts []logging.Option
+			if quiet {
+				opts = append(opts, logging.WithQuiet())
+			}
+			logging.Init(verbose, opts...)
 		},
 	}
 
 	root.PersistentFlags().BoolVar(&verbose, "verbose", false, "Verbose logging")
+	root.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress non-error output")
 	root.SilenceUsage = true
 	root.SilenceErrors = true
 

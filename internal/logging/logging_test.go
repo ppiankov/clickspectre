@@ -103,3 +103,39 @@ func captureStderr(t *testing.T, fn func()) string {
 
 	return string(output)
 }
+
+func TestInitQuietSuppressesWarn(t *testing.T) {
+	original := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(original)
+	})
+
+	output := captureStderr(t, func() {
+		Init(false, WithQuiet())
+		slog.Warn("suppressed warning")
+		slog.Error("visible error", slog.String("component", "test"))
+	})
+
+	if strings.Contains(output, "suppressed warning") {
+		t.Fatalf("expected warn to be suppressed in quiet mode, got %q", output)
+	}
+	if !strings.Contains(output, "visible error") {
+		t.Fatalf("expected error output in quiet mode, got %q", output)
+	}
+}
+
+func TestInitQuietOverridesVerbose(t *testing.T) {
+	original := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(original)
+	})
+
+	Init(true, WithQuiet())
+	logger := slog.Default()
+	if logger.Enabled(context.Background(), slog.LevelDebug) {
+		t.Fatalf("expected debug to be disabled when quiet overrides verbose")
+	}
+	if !logger.Enabled(context.Background(), slog.LevelError) {
+		t.Fatalf("expected error to remain enabled in quiet mode")
+	}
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -439,8 +440,30 @@ func TestDeployCommandAndRunDeployValidation(t *testing.T) {
 }
 
 func TestVersionCommandAndQuantityParser(t *testing.T) {
-	if err := NewVersionCmd().Execute(); err != nil {
+	// Default text output
+	cmd := NewVersionCmd()
+	if err := cmd.Execute(); err != nil {
 		t.Fatalf("version command execution failed: %v", err)
+	}
+
+	// JSON output
+	jsonCmd := NewVersionCmd()
+	if err := jsonCmd.Flags().Set("format", "json"); err != nil {
+		t.Fatalf("failed to set format flag: %v", err)
+	}
+	var buf strings.Builder
+	jsonCmd.SetOut(&buf)
+	if err := jsonCmd.Execute(); err != nil {
+		t.Fatalf("version --format json failed: %v", err)
+	}
+	var result map[string]string
+	if err := json.Unmarshal([]byte(buf.String()), &result); err != nil {
+		t.Fatalf("version JSON output not valid: %v, got: %q", err, buf.String())
+	}
+	for _, key := range []string{"version", "commit", "go", "platform"} {
+		if _, ok := result[key]; !ok {
+			t.Fatalf("expected key %q in version JSON output", key)
+		}
 	}
 
 	q := mustParseQuantity("64Mi")
