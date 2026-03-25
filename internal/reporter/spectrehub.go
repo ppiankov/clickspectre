@@ -59,9 +59,9 @@ func HashDSN(rawDSN string) string {
 	return fmt.Sprintf("sha256:%x", h)
 }
 
-// WriteSpectreHub writes the report as a spectre/v1 JSON envelope.
-func WriteSpectreHub(report *models.Report, cfg *config.Config) error {
-	envelope := spectreEnvelope{
+// buildSpectreHub constructs the spectre/v1 envelope without writing it.
+func buildSpectreHub(report *models.Report, cfg *config.Config) *spectreEnvelope {
+	envelope := &spectreEnvelope{
 		Schema:    "spectre/v1",
 		Tool:      "clickspectre",
 		Version:   report.Version,
@@ -127,6 +127,13 @@ func WriteSpectreHub(report *models.Report, cfg *config.Config) error {
 	if envelope.Findings == nil {
 		envelope.Findings = []spectreFinding{}
 	}
+
+	return envelope
+}
+
+// WriteSpectreHub writes the report as a spectre/v1 JSON envelope to a file.
+func WriteSpectreHub(report *models.Report, cfg *config.Config) error {
+	envelope := buildSpectreHub(report, cfg)
 
 	data, err := json.MarshalIndent(envelope, "", "  ")
 	if err != nil {

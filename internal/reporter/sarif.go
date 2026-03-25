@@ -114,24 +114,14 @@ type sarifLogicalLocation struct {
 }
 
 // WriteSARIF writes SARIF 2.1.0 output to report.sarif.
-func WriteSARIF(report *models.Report, cfg *config.Config) error {
-	if report == nil {
-		return fmt.Errorf("report is nil")
-	}
-	if cfg == nil {
-		return fmt.Errorf("config is nil")
-	}
-
-	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
-	}
-
+// buildSARIF constructs the SARIF log object without writing it.
+func buildSARIF(report *models.Report, cfg *config.Config) *sarifLog {
 	reportVersion := report.Version
 	if reportVersion == "" {
 		reportVersion = report.Metadata.Version
 	}
 
-	output := sarifLog{
+	return &sarifLog{
 		Version: "2.1.0",
 		Schema:  sarifSchemaURI,
 		Runs: []sarifRun{
@@ -187,6 +177,21 @@ func WriteSARIF(report *models.Report, cfg *config.Config) error {
 			},
 		},
 	}
+}
+
+func WriteSARIF(report *models.Report, cfg *config.Config) error {
+	if report == nil {
+		return fmt.Errorf("report is nil")
+	}
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	output := buildSARIF(report, cfg)
 
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
