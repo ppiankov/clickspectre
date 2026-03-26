@@ -94,36 +94,52 @@ func (c *ClickHouseClient) FetchQueryLogs(ctx context.Context, cfg *config.Confi
 		}
 	}
 
-	query := `
-		SELECT
-			query_id,
-			type,
-			event_time,
-			query_kind,
-			query,
-			user,
-			toString(initial_address) as client_ip,
-			read_rows,
-			written_rows,
-			query_duration_ms,
-			exception
-		FROM system.query_log
-		WHERE event_time >= now() - INTERVAL ? DAY
-		  AND type = 'QueryFinish'
-		  AND query NOT LIKE '%system.query_log%'
-		ORDER BY event_time DESC
-		LIMIT ? OFFSET ?
-	`
+	var query string
+	var queryArgs []interface{}
+
+	if cfg.IncrementalSince != nil {
+		// Incremental mode: fetch only entries after the watermark
+		query = `
+			SELECT
+				query_id, type, event_time, query_kind, query, user,
+				toString(initial_address) as client_ip,
+				read_rows, written_rows, query_duration_ms, exception
+			FROM system.query_log
+			WHERE event_time > ?
+			  AND type = 'QueryFinish'
+			  AND query NOT LIKE '%system.query_log%'
+			ORDER BY event_time DESC
+			LIMIT ? OFFSET ?
+		`
+		queryArgs = []interface{}{*cfg.IncrementalSince, cfg.BatchSize, 0}
+	} else {
+		query = `
+			SELECT
+				query_id, type, event_time, query_kind, query, user,
+				toString(initial_address) as client_ip,
+				read_rows, written_rows, query_duration_ms, exception
+			FROM system.query_log
+			WHERE event_time >= now() - INTERVAL ? DAY
+			  AND type = 'QueryFinish'
+			  AND query NOT LIKE '%system.query_log%'
+			ORDER BY event_time DESC
+			LIMIT ? OFFSET ?
+		`
+		queryArgs = []interface{}{lookbackDays, cfg.BatchSize, 0}
+	}
 
 	var allEntries []*models.QueryLogEntry
 	offset := 0
 	totalProcessed := 0
 
 	for {
+		// Update offset in query args
+		queryArgs[len(queryArgs)-1] = offset
+
 		var rows *sql.Rows
 		err := executeWithRetry(queryCtx, defaultRetryConfig(), func() error {
 			var queryErr error
-			rows, queryErr = c.conn.QueryContext(queryCtx, query, lookbackDays, cfg.BatchSize, offset)
+			rows, queryErr = c.conn.QueryContext(queryCtx, query, queryArgs...)
 			return queryErr
 		})
 		if err != nil {

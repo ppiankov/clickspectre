@@ -36,9 +36,13 @@ type Config struct {
 	ScoringAlgorithm   string
 	AnomalyDetection   bool
 	IncludeMVDeps      bool
-	DetectUnusedTables bool    // Enable detection of tables with zero usage
-	MinTableSizeMB     float64 // Minimum table size in MB for unused table recommendations
-	ByUser             bool    // Include per-user activity analysis
+	DetectUnusedTables bool       // Enable detection of tables with zero usage
+	MinTableSizeMB     float64    // Minimum table size in MB for unused table recommendations
+	ByUser             bool       // Include per-user activity analysis
+	Incremental        bool       // Only fetch entries newer than last run
+	IncrementalSince   *time.Time // Set internally from watermark — fetch entries after this time
+	WatermarkFile      string     // Path to watermark file for incremental mode
+	ResetWatermark     bool       // Delete watermark and force full rescan
 
 	// Server settings
 	ServerPort int

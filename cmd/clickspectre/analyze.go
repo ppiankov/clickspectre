@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -136,6 +137,9 @@ generate cleanup recommendations, and create an interactive visual report.`,
 	cmd.Flags().Float64Var(&cfg.MinTableSizeMB, "min-table-size", 1.0, "Minimum table size in MB for unused table recommendations")
 	cmd.Flags().Uint64Var(&cfg.MinQueryCount, "min-query-count", 0, "Minimum query count required to consider a table active")
 	cmd.Flags().BoolVar(&cfg.ByUser, "by-user", false, "Include per-user query activity analysis")
+	cmd.Flags().BoolVar(&cfg.Incremental, "incremental", false, "Only fetch entries newer than last run")
+	cmd.Flags().StringVar(&cfg.WatermarkFile, "watermark-file", "", "Path to watermark file (default: ~/.config/clickspectre/watermark.json)")
+	cmd.Flags().BoolVar(&cfg.ResetWatermark, "reset-watermark", false, "Delete watermark and force full rescan")
 	cmd.Flags().StringSliceVar(&cfg.ExcludeTables, "exclude-table", []string{}, "Exclude table pattern (repeatable, supports glob)")
 	cmd.Flags().StringSliceVar(&cfg.ExcludeDatabases, "exclude-database", []string{}, "Exclude database pattern (repeatable, supports glob)")
 
@@ -229,6 +233,27 @@ func runAnalyze(cfg *config.Config, isFirstRun bool) error {
 	)
 	logConnectionSettings(cfg)
 
+	// 0. Handle incremental watermark
+	wmPath := cfg.WatermarkFile
+	if wmPath == "" {
+		wmPath = collector.DefaultWatermarkPath()
+	}
+	if cfg.ResetWatermark {
+		_ = os.Remove(wmPath)
+		slog.Info("watermark reset, performing full scan")
+	}
+	if cfg.Incremental {
+		wm, wmErr := collector.LoadWatermark(wmPath)
+		if wmErr != nil {
+			slog.Warn("failed to load watermark, performing full scan", slog.String("error", wmErr.Error()))
+		} else if wm != nil {
+			cfg.IncrementalSince = &wm.LastRun
+			slog.Info("incremental mode", slog.Time("since", wm.LastRun))
+		} else {
+			slog.Info("no watermark found, first incremental run — performing full scan")
+		}
+	}
+
 	// 1. Initialize collector
 	slog.Debug("connecting to ClickHouse", slog.String("dsn", maskDSN(cfg.ClickHouseDSN)))
 	col, err := collector.New(cfg)
@@ -303,7 +328,15 @@ func runAnalyze(cfg *config.Config, isFirstRun bool) error {
 		slog.Debug("dry run enabled", slog.String("output_dir", cfg.OutputDir))
 	}
 
-	// 9. Success
+	// 9. Save watermark on success
+	if cfg.Incremental {
+		wm := &collector.Watermark{LastRun: time.Now().UTC()}
+		if err := collector.SaveWatermark(wmPath, wm); err != nil {
+			slog.Warn("failed to save watermark", slog.String("error", err.Error()))
+		}
+	}
+
+	// 10. Success
 	duration := time.Since(startTime)
 	logAnalysisSummary(cfg, report, duration)
 
