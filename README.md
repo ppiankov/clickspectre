@@ -60,25 +60,53 @@ clickspectre deploy ./report --namespace monitoring --port 8080
 
 ## CLI commands
 
+**Daily use — instant answers without full analysis:**
+
+| Command | Description | Like... |
+|---------|-------------|---------|
+| `clickspectre query` | Ad-hoc query_log search | grep |
+| `clickspectre who <table>` | Which services use this table | grep -r |
+| `clickspectre ls [database]` | List databases and tables | find / tree |
+| `clickspectre top` | Live running queries | htop |
+| `clickspectre slow` | Slow query digest with percentiles | pt-query-digest |
+| `clickspectre explain <table>` | Structured table intelligence | man page |
+| `clickspectre grants [user]` | User permissions audit | pg_hba |
+
+**Audit and reporting:**
+
 | Command | Description |
 |---------|-------------|
-| `clickspectre analyze` | Analyze query logs and report table usage |
-| `clickspectre serve` | Start web UI with interactive dependency graphs |
-| `clickspectre deploy` | Deploy report to Kubernetes with port-forwarding |
-| `clickspectre version` | Print version |
+| `clickspectre analyze` | Full table usage analysis with scoring |
+| `clickspectre diff` | Compare two reports |
+| `clickspectre watch` | Continuous drift detection |
+| `clickspectre snapshot` | Save cluster state for offline analysis |
 
-See [CLI Reference](docs/cli-reference.md) for all flags, configuration, and exit codes.
+**Operations:**
+
+| Command | Description |
+|---------|-------------|
+| `clickspectre doctor` | Connectivity and config diagnostics |
+| `clickspectre init` | Generate config and policy files |
+| `clickspectre ci-init` | Generate CI pipeline snippet |
+| `clickspectre mcp` | MCP server for agent integration |
+| `clickspectre serve` | View report in browser |
+| `clickspectre deploy` | Deploy report to Kubernetes |
+| `clickspectre version` | Version info (--format json) |
+
+See [CLI Reference](docs/cli-reference.md) for all flags and exit codes.
 
 ## Agent integration
 
-Single binary, deterministic output, structured JSON, bounded execution.
+Single binary, deterministic output, structured JSON, bounded execution. ANCC-compliant.
 
-Agents: read [`SKILL.md`](SKILL.md) for commands, flags, JSON output, and exit codes.
+Agents: read [`docs/SKILL.md`](docs/SKILL.md) for commands, flags, JSON schemas, and exit codes.
 
 Key patterns:
-- `clickspectre analyze --clickhouse-dsn <dsn> --format json` — table usage audit
-- `clickspectre analyze --clickhouse-dsn <dsn> --format sarif` — findings for GitHub Security tab
-- Exit code 6 means findings detected (unused tables, cleanup recommendations)
+- `clickspectre query --clickhouse-dsn $DSN --table events --by user --format json` — instant lookup
+- `clickspectre explain db.events --format json -q` — structured table context for agents
+- `clickspectre analyze --clickhouse-dsn $DSN --format json --output -` — pipe analysis to stdout
+- `clickspectre mcp --clickhouse-dsn $DSN` — persistent MCP server for IDE integration
+- Exit code 6 means findings detected (unused tables, policy violations)
 
 ## SpectreHub integration
 
