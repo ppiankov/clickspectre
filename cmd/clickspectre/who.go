@@ -38,13 +38,14 @@ func NewWhoCmd() *cobra.Command {
 		groupBy  string
 		format   string
 		top      int
+		stdin    bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "who <table>",
 		Short: "Show which services/users access a table",
-		Long:  "Reverse dependency lookup: given a table name, show all services, users, or IPs that query it. Answer 'who depends on this table?' before making changes.",
-		Args:  cobra.ExactArgs(1),
+		Long:  "Reverse dependency lookup: given a table name, show all services, users, or IPs that query it. Answer 'who depends on this table?' before making changes. Use --stdin to pipe table names.",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var logOpts []logging.Option
 			if quiet {
@@ -74,19 +75,37 @@ func NewWhoCmd() *cobra.Command {
 			}
 			defer func() { _ = col.Close() }()
 
-			output, err := runWho(col, args[0], dur, groupBy, top)
-			if err != nil {
-				return err
-			}
-			output.Lookback = lookback
-
-			if format == "json" {
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(output)
+			// Collect table names from args or stdin
+			var tables []string
+			if stdin {
+				tables = readStdinLines()
+			} else if len(args) > 0 {
+				tables = []string{args[0]}
+			} else {
+				return fmt.Errorf("provide a table name or use --stdin")
 			}
 
-			printWho(cmd, output)
+			for _, table := range tables {
+				table = strings.TrimSpace(table)
+				if table == "" {
+					continue
+				}
+				output, err := runWho(col, table, dur, groupBy, top)
+				if err != nil {
+					return err
+				}
+				output.Lookback = lookback
+
+				if format == "json" {
+					enc := json.NewEncoder(os.Stdout)
+					enc.SetIndent("", "  ")
+					if err := enc.Encode(output); err != nil {
+						return err
+					}
+				} else {
+					printWho(cmd, output)
+				}
+			}
 			return nil
 		},
 	}
@@ -95,6 +114,7 @@ func NewWhoCmd() *cobra.Command {
 	cmd.Flags().StringVar(&lookback, "lookback", "7d", "Time window (e.g., 1h, 7d, 30d)")
 	cmd.Flags().StringVar(&groupBy, "by", "ip", "Group by: ip, user")
 	cmd.Flags().StringVar(&format, "format", "text", "Output format (text|json)")
+	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read table names from stdin")
 	cmd.Flags().IntVar(&top, "top", 20, "Limit results")
 
 	return cmd

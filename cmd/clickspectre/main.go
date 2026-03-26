@@ -69,6 +69,8 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.AddCommand(NewCIInitCmd())
 	root.AddCommand(NewDiffCmd())
 	root.AddCommand(NewDoctorCmd())
+	root.AddCommand(NewExplainCmd())
+	root.AddCommand(NewGrantsCmd())
 	root.AddCommand(NewInitCmd())
 	root.AddCommand(NewLSCmd())
 	root.AddCommand(NewQueryCmd())
