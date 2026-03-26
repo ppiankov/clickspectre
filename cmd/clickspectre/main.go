@@ -73,6 +73,7 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.AddCommand(NewGrantsCmd())
 	root.AddCommand(NewInitCmd())
 	root.AddCommand(NewLSCmd())
+	root.AddCommand(NewMCPCmd())
 	root.AddCommand(NewQueryCmd())
 	root.AddCommand(NewServeCmd())
 	root.AddCommand(NewSlowCmd())
