@@ -291,6 +291,62 @@ Slow query digest — pt-query-digest for ClickHouse.
 - 0: success
 - 5: connection failure
 
+### clickspectre grants
+
+Show user permissions from system.users and system.grants.
+
+**Usage:** `clickspectre grants [user]`
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--unused` — only show users with grants but zero queries (revoke candidates)
+- `--lookback 30d` — lookback for --unused
+- `--format json` — structured output
+
+**Exit codes:**
+- 0: success
+- 5: connection failure
+
+### clickspectre explain
+
+Structured table intelligence — what is this table?
+
+**Usage:** `clickspectre explain <table>`
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--lookback 30d` — analysis window
+- `--format json` — structured output (primary agent use case)
+
+**JSON output:**
+```json
+{
+  "table": "events", "database": "default", "engine": "MergeTree",
+  "size_mb": 1024.5, "rows": 5000000, "status": "active",
+  "total_reads": 14203, "total_writes": 0,
+  "top_users": [{"key": "ads_user", "count": 142}],
+  "top_ips": [{"key": "10.0.0.1", "count": 89}],
+  "query_kinds": [{"kind": "Select", "count": 14203}]
+}
+```
+
+**Exit codes:**
+- 0: success
+- 5: connection failure
+
+### clickspectre snapshot
+
+Save cluster state to a JSON file for offline analysis.
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `-o path` — output file (default: snapshot.json, use - for stdout)
+- `--lookback 30d` — activity lookback
+
+**Exit codes:**
+- 0: snapshot saved
+- 5: connection failure
+
 ### clickspectre ci-init
 
 Generate ready-to-paste CI pipeline snippet.
