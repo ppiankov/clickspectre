@@ -135,6 +135,7 @@ generate cleanup recommendations, and create an interactive visual report.`,
 	cmd.Flags().BoolVar(&cfg.DetectUnusedTables, "detect-unused-tables", false, "Detect tables with zero usage in query logs")
 	cmd.Flags().Float64Var(&cfg.MinTableSizeMB, "min-table-size", 1.0, "Minimum table size in MB for unused table recommendations")
 	cmd.Flags().Uint64Var(&cfg.MinQueryCount, "min-query-count", 0, "Minimum query count required to consider a table active")
+	cmd.Flags().BoolVar(&cfg.ByUser, "by-user", false, "Include per-user query activity analysis")
 	cmd.Flags().StringSliceVar(&cfg.ExcludeTables, "exclude-table", []string{}, "Exclude table pattern (repeatable, supports glob)")
 	cmd.Flags().StringSliceVar(&cfg.ExcludeDatabases, "exclude-database", []string{}, "Exclude database pattern (repeatable, supports glob)")
 
@@ -353,7 +354,7 @@ func buildReport(
 	// Extract host from DSN
 	host := extractHost(cfg.ClickHouseDSN)
 
-	return &models.Report{
+	report := &models.Report{
 		Tool:       "clickspectre",
 		Version:    version,
 		Timestamp:  generatedAt.Format(time.RFC3339),
@@ -373,6 +374,12 @@ func buildReport(
 		Anomalies:              anomalies,
 		CleanupRecommendations: recommendations,
 	}
+
+	if cfg.ByUser {
+		report.Users = analyzer.BuildUserActivity(entries)
+	}
+
+	return report
 }
 
 // maskDSN masks the password in a DSN while preserving scheme, user, host, port, and path.

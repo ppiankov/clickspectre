@@ -18,6 +18,15 @@ type QueryLogEntry struct {
 	Tables      []string // Extracted from query
 }
 
+// UserActivity represents per-user query activity within the lookback period.
+type UserActivity struct {
+	Username   string    `json:"username"`
+	QueryCount int64     `json:"query_count"`
+	LastSeen   time.Time `json:"last_seen,omitempty"`
+	TablesUsed []string  `json:"tables_used"`
+	IsActive   bool      `json:"is_active"`
+}
+
 // Table represents a ClickHouse table with usage stats
 type Table struct {
 	Name         string            `json:"name"`

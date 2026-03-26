@@ -108,6 +108,60 @@ func (a *Analyzer) Anomalies() []*models.Anomaly {
 	return a.anomalies
 }
 
+// BuildUserActivity aggregates query log entries by user and returns per-user activity summaries.
+func BuildUserActivity(entries []*models.QueryLogEntry) []models.UserActivity {
+	type userAgg struct {
+		count    int64
+		lastSeen time.Time
+		tables   map[string]bool
+	}
+
+	agg := make(map[string]*userAgg)
+	for _, e := range entries {
+		if e.User == "" {
+			continue
+		}
+		u, ok := agg[e.User]
+		if !ok {
+			u = &userAgg{tables: make(map[string]bool)}
+			agg[e.User] = u
+		}
+		u.count++
+		if e.EventTime.After(u.lastSeen) {
+			u.lastSeen = e.EventTime
+		}
+		for _, t := range e.Tables {
+			u.tables[t] = true
+		}
+	}
+
+	result := make([]models.UserActivity, 0, len(agg))
+	for username, u := range agg {
+		tables := make([]string, 0, len(u.tables))
+		for t := range u.tables {
+			tables = append(tables, t)
+		}
+		result = append(result, models.UserActivity{
+			Username:   username,
+			QueryCount: u.count,
+			LastSeen:   u.lastSeen,
+			TablesUsed: tables,
+			IsActive:   u.count > 0,
+		})
+	}
+
+	// Sort by query count descending for consistent output
+	for i := 0; i < len(result); i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[j].QueryCount > result[i].QueryCount {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	return result
+}
+
 // enrichWithCompleteInventory enriches the analysis with complete table inventory from system.tables
 // This detects tables that have zero usage in the query logs
 func (a *Analyzer) enrichWithCompleteInventory(ctx context.Context) error {

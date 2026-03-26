@@ -38,6 +38,7 @@ type Config struct {
 	IncludeMVDeps      bool
 	DetectUnusedTables bool    // Enable detection of tables with zero usage
 	MinTableSizeMB     float64 // Minimum table size in MB for unused table recommendations
+	ByUser             bool    // Include per-user activity analysis
 
 	// Server settings
 	ServerPort int

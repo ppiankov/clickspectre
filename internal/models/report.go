@@ -13,6 +13,7 @@ type Report struct {
 	Services               []Service              `json:"services"`
 	Edges                  []Edge                 `json:"edges"`
 	Anomalies              []Anomaly              `json:"anomalies"`
+	Users                  []UserActivity         `json:"users,omitempty"`
 	CleanupRecommendations CleanupRecommendations `json:"cleanup_recommendations"`
 }
 
