@@ -16,6 +16,7 @@ import (
 	"github.com/ppiankov/clickspectre/internal/k8s"
 	"github.com/ppiankov/clickspectre/internal/logging"
 	"github.com/ppiankov/clickspectre/internal/models"
+	"github.com/ppiankov/clickspectre/internal/policy"
 	"github.com/ppiankov/clickspectre/internal/reporter"
 	"github.com/ppiankov/clickspectre/internal/scorer"
 	"github.com/ppiankov/clickspectre/pkg/config"
@@ -140,6 +141,7 @@ generate cleanup recommendations, and create an interactive visual report.`,
 	cmd.Flags().BoolVar(&cfg.Incremental, "incremental", false, "Only fetch entries newer than last run")
 	cmd.Flags().StringVar(&cfg.WatermarkFile, "watermark-file", "", "Path to watermark file (default: ~/.config/clickspectre/watermark.json)")
 	cmd.Flags().BoolVar(&cfg.ResetWatermark, "reset-watermark", false, "Delete watermark and force full rescan")
+	cmd.Flags().StringVar(&cfg.PolicyFile, "policy", "", "Policy file for table hygiene enforcement (.clickspectre-policy.yaml)")
 	cmd.Flags().StringSliceVar(&cfg.ExcludeTables, "exclude-table", []string{}, "Exclude table pattern (repeatable, supports glob)")
 	cmd.Flags().StringSliceVar(&cfg.ExcludeDatabases, "exclude-database", []string{}, "Exclude database pattern (repeatable, supports glob)")
 
@@ -314,6 +316,26 @@ func runAnalyze(cfg *config.Config, isFirstRun bool) error {
 	// 7. Apply baseline (if enabled)
 	if err := applyBaseline(cfg, report); err != nil {
 		return err
+	}
+
+	// 7.5. Apply policy (if enabled)
+	if cfg.PolicyFile != "" {
+		pol, err := policy.Load(cfg.PolicyFile)
+		if err != nil {
+			return fmt.Errorf("failed to load policy: %w", err)
+		}
+		violations := pol.Evaluate(report)
+		if len(violations) > 0 {
+			slog.Info("policy violations detected", slog.Int("count", len(violations)))
+			for _, v := range violations {
+				report.Anomalies = append(report.Anomalies, models.Anomaly{
+					Type:          "policy_violation",
+					Severity:      v.Severity,
+					Description:   v.Message,
+					AffectedTable: v.Table,
+				})
+			}
+		}
 	}
 
 	// 8. Write output

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ppiankov/clickspectre/internal/policy"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,10 @@ const defaultConfigTemplate = `# clickspectre configuration
 
 // NewInitCmd creates the init command
 func NewInitCmd() *cobra.Command {
-	var force bool
+	var (
+		force      bool
+		withPolicy bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -56,11 +60,21 @@ func NewInitCmd() *cobra.Command {
 			}
 
 			cmd.Printf("Created %s\n", configFile)
+
+			if withPolicy {
+				const policyFile = ".clickspectre-policy.yaml"
+				if err := os.WriteFile(policyFile, []byte(policy.Template()), 0644); err != nil {
+					return fmt.Errorf("failed to write %s: %w", policyFile, err)
+				}
+				cmd.Printf("Created %s\n", policyFile)
+			}
+
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing config file")
+	cmd.Flags().BoolVar(&withPolicy, "with-policy", false, "Also generate a policy template")
 
 	return cmd
 }

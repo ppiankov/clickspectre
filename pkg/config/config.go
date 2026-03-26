@@ -43,6 +43,7 @@ type Config struct {
 	IncrementalSince   *time.Time // Set internally from watermark — fetch entries after this time
 	WatermarkFile      string     // Path to watermark file for incremental mode
 	ResetWatermark     bool       // Delete watermark and force full rescan
+	PolicyFile         string     // Path to policy file for enforcement
 
 	// Server settings
 	ServerPort int
