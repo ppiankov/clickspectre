@@ -69,6 +69,7 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.AddCommand(NewInitCmd())
 	root.AddCommand(NewServeCmd())
 	root.AddCommand(NewDeployCmd())
+	root.AddCommand(NewWatchCmd())
 	root.AddCommand(NewVersionCmd())
 
 	if err := root.Execute(); err != nil {
