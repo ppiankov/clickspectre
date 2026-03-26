@@ -66,6 +66,8 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.SilenceErrors = true
 
 	root.AddCommand(NewAnalyzeCmd())
+	root.AddCommand(NewDiffCmd())
+	root.AddCommand(NewDoctorCmd())
 	root.AddCommand(NewInitCmd())
 	root.AddCommand(NewQueryCmd())
 	root.AddCommand(NewServeCmd())
