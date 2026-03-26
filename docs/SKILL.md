@@ -229,6 +229,79 @@ Run analyze on a schedule and report table drift between runs.
 - 0: no changes or baseline established
 - 6: new inactive tables detected (with --once)
 
+### clickspectre ls
+
+List databases and tables — find/tree for ClickHouse.
+
+**Usage:** `clickspectre ls [database]`
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--format json` — structured output
+- `--sort (name|size|rows)` — sort tables
+
+**Exit codes:**
+- 0: success
+
+### clickspectre who
+
+Show which services/users/IPs access a given table.
+
+**Usage:** `clickspectre who <table>`
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--by (ip|user)` — group by dimension
+- `--lookback 7d` — time window
+- `--format json` — structured output
+
+**Exit codes:**
+- 0: results returned
+- 5: connection failure
+
+### clickspectre top
+
+Show running ClickHouse queries — htop for ClickHouse.
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--watch` — live refresh mode
+- `--interval 2s` — refresh interval
+- `--min-elapsed 5` — filter by elapsed seconds
+- `--user USER` — filter by user
+- `--format json` — structured output
+
+**Exit codes:**
+- 0: success
+- 5: connection failure
+
+### clickspectre slow
+
+Slow query digest — pt-query-digest for ClickHouse.
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--lookback 24h` — time window
+- `--min-duration 1s` — filter fast patterns
+- `--sort (duration|count|read_rows)` — sort dimension
+- `--show-example` — include one sample query per pattern
+- `--format json` — structured output
+
+**Exit codes:**
+- 0: success
+- 5: connection failure
+
+### clickspectre ci-init
+
+Generate ready-to-paste CI pipeline snippet.
+
+**Flags:**
+- `--format (gitlab|github)` — CI platform (default: gitlab)
+- `--stage NAME` — CI stage name (default: validate)
+
+**Exit codes:**
+- 0: snippet printed to stdout
+
 ### clickspectre init
 
 Create a `.clickspectre.yaml` config file with commented defaults.
