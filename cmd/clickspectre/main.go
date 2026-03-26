@@ -76,6 +76,7 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.AddCommand(NewQueryCmd())
 	root.AddCommand(NewServeCmd())
 	root.AddCommand(NewSlowCmd())
+	root.AddCommand(NewSnapshotCmd())
 	root.AddCommand(NewTopCmd())
 	root.AddCommand(NewWhoCmd())
 	root.AddCommand(NewDeployCmd())
