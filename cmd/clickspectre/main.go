@@ -66,13 +66,16 @@ service-to-table relationships, usage statistics, and cleanup recommendations.`,
 	root.SilenceErrors = true
 
 	root.AddCommand(NewAnalyzeCmd())
+	root.AddCommand(NewCIInitCmd())
 	root.AddCommand(NewDiffCmd())
 	root.AddCommand(NewDoctorCmd())
 	root.AddCommand(NewInitCmd())
+	root.AddCommand(NewLSCmd())
 	root.AddCommand(NewQueryCmd())
 	root.AddCommand(NewServeCmd())
 	root.AddCommand(NewSlowCmd())
 	root.AddCommand(NewTopCmd())
+	root.AddCommand(NewWhoCmd())
 	root.AddCommand(NewDeployCmd())
 	root.AddCommand(NewWatchCmd())
 	root.AddCommand(NewVersionCmd())
