@@ -31,11 +31,10 @@ type spectreTarget struct {
 }
 
 type spectreFinding struct {
-	ID       string         `json:"id"`
-	Severity string         `json:"severity"`
-	Location string         `json:"location"`
-	Message  string         `json:"message"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	ID       string `json:"id"`
+	Severity string `json:"severity"`
+	Location string `json:"location"`
+	Message  string `json:"message"`
 }
 
 type spectreSummary struct {
@@ -61,10 +60,14 @@ func HashDSN(rawDSN string) string {
 
 // buildSpectreHub constructs the spectre/v1 envelope without writing it.
 func buildSpectreHub(report *models.Report, cfg *config.Config) *spectreEnvelope {
+	ver := report.Version
+	if ver == "" || ver == "dev" {
+		ver = "0.0.0"
+	}
 	envelope := &spectreEnvelope{
 		Schema:    "spectre/v1",
 		Tool:      "clickspectre",
-		Version:   report.Version,
+		Version:   ver,
 		Timestamp: report.Timestamp,
 		Target: spectreTarget{
 			Type:    "clickhouse",
@@ -79,12 +82,7 @@ func buildSpectreHub(report *models.Report, cfg *config.Config) *spectreEnvelope
 			ID:       "ZERO_USAGE_TABLE",
 			Severity: "high",
 			Location: loc,
-			Message:  fmt.Sprintf("table %q has zero usage and is not replicated (%.1f MB)", loc, t.SizeMB),
-			Metadata: map[string]any{
-				"engine":  t.Engine,
-				"size_mb": t.SizeMB,
-				"rows":    t.Rows,
-			},
+			Message:  fmt.Sprintf("table %q has zero usage and is not replicated (engine: %s, %.1f MB, %d rows)", loc, t.Engine, t.SizeMB, t.Rows),
 		})
 		envelope.Summary.High++
 	}
@@ -96,13 +94,7 @@ func buildSpectreHub(report *models.Report, cfg *config.Config) *spectreEnvelope
 			ID:       "ZERO_USAGE_TABLE",
 			Severity: "medium",
 			Location: loc,
-			Message:  fmt.Sprintf("table %q has zero usage (replicated, %.1f MB)", loc, t.SizeMB),
-			Metadata: map[string]any{
-				"engine":        t.Engine,
-				"size_mb":       t.SizeMB,
-				"rows":          t.Rows,
-				"is_replicated": true,
-			},
+			Message:  fmt.Sprintf("table %q has zero usage (replicated, engine: %s, %.1f MB, %d rows)", loc, t.Engine, t.SizeMB, t.Rows),
 		})
 		envelope.Summary.Medium++
 	}
