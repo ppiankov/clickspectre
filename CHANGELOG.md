@@ -5,6 +5,43 @@ All notable changes to ClickSpectre will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-26
+
+### Added
+- `query` command — ad-hoc query_log power tool with flexible filtering
+- `top` command — live running queries view for incident response
+- `slow` command — slow query digest and performance analysis
+- `who` command — which services use a given table, with `--stdin` support
+- `ls` command — list ClickHouse databases and tables
+- `grants` command — user permissions audit
+- `explain` command — structured table intelligence for agents
+- `snapshot` command — save cluster state for offline analysis
+- `diff` command — compare two analysis reports
+- `watch` command — continuous table drift detection
+- `doctor` command — connectivity and config diagnostics
+- `init` command — guided config setup for first-run experience
+- `ci-init` command — generate CI pipeline snippets
+- MCP server mode for agent integration (8 tools exposed via `mcp` command)
+- Multi-node ClickHouse support with query_id deduplication
+- Incremental query_log collection with watermark file
+- Per-user query activity analysis (`--by-user` flag)
+- Policy-as-code enforcement for table hygiene (`--policy` flag)
+- Built-in secret redaction for query text
+- `--stdin` support for Unix composition on `who` and `query` commands
+- `--quiet` flag for machine consumption
+- `--output -` for stdout JSON piping
+- `--format json` on `version` command
+
+### Changed
+- Serve/deploy logging migrated to slog
+- README updated with all 18 commands and CLI reference
+
+### Fixed
+- `spectre/v1` schema compliance — removed invalid `additionalProperties`
+- URL-aware DSN masking preserving hostname
+- DSN format validation in PreRunE
+- Version injection via ldflags (replaced hardcoded value)
+
 ## [1.0.2] - 2026-02-23
 
 ### Added
@@ -66,5 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SHA256 checksum generation for all releases
 - Auto-generated release notes
 
+[1.1.0]: https://github.com/ppiankov/clickspectre/releases/compare/v1.0.2...v1.1.0
+[1.0.2]: https://github.com/ppiankov/clickspectre/releases/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ppiankov/clickspectre/releases/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ppiankov/clickspectre/releases/tag/v1.0.0
