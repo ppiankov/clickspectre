@@ -8,11 +8,20 @@ type Report struct {
 	Version                string                 `json:"version"`
 	Timestamp              string                 `json:"timestamp"`
 	Metadata               Metadata               `json:"metadata"`
+	Collection             *CollectionMeta        `json:"collection,omitempty"`
 	Tables                 []Table                `json:"tables"`
 	Services               []Service              `json:"services"`
 	Edges                  []Edge                 `json:"edges"`
 	Anomalies              []Anomaly              `json:"anomalies"`
 	CleanupRecommendations CleanupRecommendations `json:"cleanup_recommendations"`
+}
+
+// CollectionMeta holds metadata about the query_log collection across nodes.
+type CollectionMeta struct {
+	Nodes        []string `json:"nodes"`
+	FailedNodes  []string `json:"failed_nodes"`
+	TotalEntries int      `json:"total_entries"`
+	Deduplicated int      `json:"deduplicated,omitempty"`
 }
 
 // Metadata contains report generation info

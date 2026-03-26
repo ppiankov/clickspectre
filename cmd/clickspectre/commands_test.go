@@ -251,7 +251,7 @@ func TestBuildReportIncludesAnalyzedData(t *testing.T) {
 
 	report := buildReport(cfg, entries, an, models.CleanupRecommendations{
 		SafeToDrop: []string{"db.old_events"},
-	}, time.Now().Add(-2*time.Second))
+	}, time.Now().Add(-2*time.Second), nil)
 
 	if report.Tool != "clickspectre" {
 		t.Fatalf("expected tool to be %q, got %q", "clickspectre", report.Tool)
@@ -580,12 +580,12 @@ func TestNewAnalyzeCmdDSNValidation(t *testing.T) {
 		{
 			name:    "wrong_scheme",
 			dsn:     "http://host:9000/db",
-			wantErr: "invalid --clickhouse-dsn scheme",
+			wantErr: "invalid --clickhouse-dsn",
 		},
 		{
 			name:    "postgres_scheme",
 			dsn:     "postgres://host:5432/db",
-			wantErr: "invalid --clickhouse-dsn scheme",
+			wantErr: "invalid --clickhouse-dsn",
 		},
 	}
 

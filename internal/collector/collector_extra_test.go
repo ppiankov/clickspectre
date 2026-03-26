@@ -381,7 +381,7 @@ func TestClickHouseClientAndCollectorClose(t *testing.T) {
 		t.Fatalf("expected close success, got %v", err)
 	}
 
-	col := &collector{client: nil}
+	col := &collector{clients: nil}
 	if err := col.Close(); err != nil {
 		t.Fatalf("expected collector close success, got %v", err)
 	}
@@ -416,9 +416,10 @@ func TestCollectorCollectAndWrapperMethods(t *testing.T) {
 
 	client := &ClickHouseClient{conn: db, config: cfg}
 	col := &collector{
-		config: cfg,
-		client: client,
-		pool:   NewWorkerPool(2),
+		config:  cfg,
+		clients: []*ClickHouseClient{client},
+		dsns:    []string{"clickhouse://localhost:9000/default"},
+		pool:    NewWorkerPool(2),
 	}
 
 	entries, err := col.Collect(context.Background())
@@ -445,7 +446,7 @@ func TestCollectorCollectAndWrapperMethods(t *testing.T) {
 	t.Cleanup(func() {
 		_ = metadataDB.Close()
 	})
-	col.client = &ClickHouseClient{conn: metadataDB, config: cfg}
+	col.clients = []*ClickHouseClient{{conn: metadataDB, config: cfg}}
 
 	tables, err := col.FetchTableMetadata(context.Background())
 	if err != nil {
@@ -472,9 +473,10 @@ func TestCollectorCollectErrorPathStopsPool(t *testing.T) {
 	cfg.LookbackPeriod = 24 * time.Hour
 
 	col := &collector{
-		config: cfg,
-		client: &ClickHouseClient{conn: db, config: cfg},
-		pool:   NewWorkerPool(1),
+		config:  cfg,
+		clients: []*ClickHouseClient{{conn: db, config: cfg}},
+		dsns:    []string{"clickhouse://localhost:9000/default"},
+		pool:    NewWorkerPool(1),
 	}
 
 	_, err := col.Collect(context.Background())
@@ -511,6 +513,55 @@ func TestWorkerPoolLifecycle(t *testing.T) {
 	}
 	if pool.started {
 		t.Fatal("expected pool started=false after Stop")
+	}
+}
+
+func TestDeduplicateByQueryID(t *testing.T) {
+	entries := []*models.QueryLogEntry{
+		{QueryID: "q1", User: "user1"},
+		{QueryID: "q2", User: "user2"},
+		{QueryID: "q1", User: "user1_dup"}, // duplicate
+		{QueryID: "q3", User: "user3"},
+		{QueryID: "q2", User: "user2_dup"}, // duplicate
+		{QueryID: "", User: "empty_id"},    // empty query_id kept
+	}
+
+	result := deduplicateByQueryID(entries)
+	if len(result) != 4 { // q1, q2, q3, empty
+		t.Fatalf("expected 4 entries after dedup, got %d", len(result))
+	}
+
+	// Verify first occurrence is kept
+	if result[0].User != "user1" {
+		t.Fatalf("expected first q1 to be kept, got user=%s", result[0].User)
+	}
+	if result[1].User != "user2" {
+		t.Fatalf("expected first q2 to be kept, got user=%s", result[1].User)
+	}
+}
+
+func TestExtractHost(t *testing.T) {
+	tests := []struct {
+		dsn  string
+		want string
+	}{
+		{"clickhouse://user:pass@host:9000/db", "host:9000"},
+		{"clickhouse://readonly@host:9000/db", "host:9000"},
+		{"short", "unknown"},
+		{"", "unknown"},
+	}
+	for _, tc := range tests {
+		got := extractHost(tc.dsn)
+		if got != tc.want {
+			t.Errorf("extractHost(%q) = %q, want %q", tc.dsn, got, tc.want)
+		}
+	}
+}
+
+func TestCollectorCollectionMeta(t *testing.T) {
+	col := &collector{}
+	if col.CollectionMeta() != nil {
+		t.Fatal("expected nil meta before collection")
 	}
 }
 

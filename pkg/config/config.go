@@ -6,6 +6,7 @@ import "time"
 type Config struct {
 	// ClickHouse settings
 	ClickHouseDSN    string
+	ClickHouseDSNs   []string // Parsed from comma-separated ClickHouseDSN
 	QueryTimeout     time.Duration
 	BatchSize        int
 	MaxRows          int

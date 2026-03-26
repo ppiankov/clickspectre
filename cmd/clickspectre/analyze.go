@@ -73,13 +73,18 @@ generate cleanup recommendations, and create an interactive visual report.`,
 				return fmt.Errorf("required flag(s) \"clickhouse-dsn\" or \"clickhouse-url\" not set")
 			}
 
-			parsed, err := url.Parse(cfg.ClickHouseDSN)
-			if err != nil || parsed.Host == "" {
-				return fmt.Errorf("invalid --clickhouse-dsn: expected clickhouse://[user[:pass]@]host[:port]/db")
-			}
-			scheme := strings.ToLower(parsed.Scheme)
-			if scheme != "clickhouse" && scheme != "chhttp" && scheme != "chhttps" {
-				return fmt.Errorf("invalid --clickhouse-dsn scheme %q: expected clickhouse, chhttp, or chhttps", parsed.Scheme)
+			// Parse comma-separated DSNs for multi-node support
+			cfg.ClickHouseDSNs = strings.Split(cfg.ClickHouseDSN, ",")
+			for i, dsn := range cfg.ClickHouseDSNs {
+				cfg.ClickHouseDSNs[i] = strings.TrimSpace(dsn)
+				parsed, err := url.Parse(cfg.ClickHouseDSNs[i])
+				if err != nil || parsed.Host == "" {
+					return fmt.Errorf("invalid --clickhouse-dsn[%d]: expected clickhouse://[user[:pass]@]host[:port]/db", i)
+				}
+				scheme := strings.ToLower(parsed.Scheme)
+				if scheme != "clickhouse" && scheme != "chhttp" && scheme != "chhttps" {
+					return fmt.Errorf("invalid --clickhouse-dsn[%d] scheme %q: expected clickhouse, chhttp, or chhttps", i, parsed.Scheme)
+				}
 			}
 
 			cfg.Format = strings.ToLower(cfg.Format)
@@ -278,7 +283,7 @@ func runAnalyze(cfg *config.Config, isFirstRun bool) error {
 	)
 
 	// 6. Build report
-	report := buildReport(cfg, entries, an, recommendations, startTime)
+	report := buildReport(cfg, entries, an, recommendations, startTime, col.CollectionMeta())
 
 	// 7. Apply baseline (if enabled)
 	if err := applyBaseline(cfg, report); err != nil {
@@ -320,6 +325,7 @@ func buildReport(
 	an *analyzer.Analyzer,
 	recommendations models.CleanupRecommendations,
 	startTime time.Time,
+	collectionMeta *models.CollectionMeta,
 ) *models.Report {
 	generatedAt := time.Now().UTC()
 
@@ -348,9 +354,10 @@ func buildReport(
 	host := extractHost(cfg.ClickHouseDSN)
 
 	return &models.Report{
-		Tool:      "clickspectre",
-		Version:   version,
-		Timestamp: generatedAt.Format(time.RFC3339),
+		Tool:       "clickspectre",
+		Version:    version,
+		Timestamp:  generatedAt.Format(time.RFC3339),
+		Collection: collectionMeta,
 		Metadata: models.Metadata{
 			GeneratedAt:          generatedAt,
 			LookbackDays:         int(cfg.LookbackPeriod.Hours() / 24),
