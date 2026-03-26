@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -17,6 +18,8 @@ type Collector interface {
 	Close() error
 	// CollectionMeta returns metadata about the last collection run.
 	CollectionMeta() *models.CollectionMeta
+	// QueryRaw executes a raw SQL query against the first available node.
+	QueryRaw(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 }
 
 // collector implements the Collector interface
@@ -170,6 +173,14 @@ func (c *collector) FetchTableMetadata(ctx context.Context) (map[string]*models.
 // CollectionMeta returns metadata about the last collection run.
 func (c *collector) CollectionMeta() *models.CollectionMeta {
 	return c.meta
+}
+
+// QueryRaw executes a raw SQL query against the first available node.
+func (c *collector) QueryRaw(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	if len(c.clients) == 0 {
+		return nil, fmt.Errorf("no ClickHouse clients available")
+	}
+	return c.clients[0].conn.QueryContext(ctx, query, args...)
 }
 
 // Close closes the collector and all its client connections
