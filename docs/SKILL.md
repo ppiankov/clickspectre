@@ -156,6 +156,79 @@ Deploy report to Kubernetes as an nginx pod with port-forwarding.
 - 3: report directory not found
 - 5: cluster unreachable
 
+### clickspectre query
+
+Fast, targeted queries against system.query_log. The grep of ClickHouse.
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN (required, comma-separated for multi-node)
+- `--table TABLE` — filter by table name
+- `--user USER` — filter by user
+- `--ip IP` — filter by client IP
+- `--by (user|table|ip)` — group results by dimension (default: table)
+- `--lookback 24h` — time window (default: 24h)
+- `--top 20` — limit results (default: 20)
+- `--min-read-rows N` — filter by minimum read rows
+- `--show-queries` — show sample SQL
+- `--format json` — structured output for piping
+
+**JSON output:**
+```json
+{
+  "filter": "table=events",
+  "group_by": "user",
+  "lookback": "24h",
+  "results": [
+    {"key": "ads_user", "query_count": 142, "read_rows": 5000000, "last_seen": "2026-03-26T10:00:00Z"}
+  ]
+}
+```
+
+**Exit codes:**
+- 0: results returned
+- 1: internal error
+- 2: invalid arguments
+- 5: connection failure
+
+### clickspectre diff
+
+Compare two analysis reports and show tables added, removed, or changed.
+
+**Usage:** `clickspectre diff <old-report> <new-report>`
+
+**Flags:**
+- `--format json` — structured delta output
+
+**Exit codes:**
+- 0: no changes
+- 6: findings changed (new inactive tables or category changes)
+
+### clickspectre doctor
+
+Run diagnostic checks against ClickHouse, config, and local state.
+
+**Flags:**
+- `--clickhouse-dsn` — ClickHouse DSN
+- `--config path` — config file path
+- `--format json` — structured checklist output
+
+**Exit codes:**
+- 0: all checks pass
+- 2: one or more checks failed
+
+### clickspectre watch
+
+Run analyze on a schedule and report table drift between runs.
+
+**Flags:**
+- `--interval 24h` — how often to run (minimum 1h)
+- `--state-file path` — watch state file (default: `~/.config/clickspectre/watch-state.json`)
+- `--once` — run once and exit (CI-friendly)
+
+**Exit codes:**
+- 0: no changes or baseline established
+- 6: new inactive tables detected (with --once)
+
 ### clickspectre init
 
 Create a `.clickspectre.yaml` config file with commented defaults.
@@ -202,12 +275,24 @@ Show version, commit, Go version, and platform.
 ## Parsing examples
 
 ```bash
+# Who uses this table? (ad-hoc, sub-second)
+clickspectre query --clickhouse-dsn $DSN --table events --by user --format json
+
+# What does this user query?
+clickspectre query --clickhouse-dsn $DSN --user ads_user --by table
+
 # Extract cleanup recommendations
 clickspectre analyze --clickhouse-dsn $DSN --format json
 cat ./report/report.json | jq '.cleanup_recommendations.safe_to_drop'
 
-# Count findings
-cat ./report/report.json | jq '.cleanup_recommendations | (.zero_usage_non_replicated | length) + (.zero_usage_replicated | length)'
+# Pipe analysis to stdout
+clickspectre analyze --clickhouse-dsn $DSN --format json --output - | jq '.summary'
+
+# Compare two reports
+clickspectre diff report-monday/ report-friday/ --format json
+
+# Check connectivity before running
+clickspectre doctor --clickhouse-dsn $DSN --format json
 
 # SpectreHub pipeline
 clickspectre analyze --clickhouse-dsn $DSN --format spectrehub
